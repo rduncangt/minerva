@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -100,6 +101,11 @@ func isSuspiciousLog(line string) bool {
 }
 
 func main() {
+	// Add a flag for limiting the number of outputs
+	limitFlag := flag.Int("limit", -1, "Limit the number of results (-1 for no limit)")
+	flag.Parse()
+	limit := *limitFlag
+
 	// Regex patterns for various fields
 	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
 	srcIPRegex := regexp.MustCompile(`SRC=(\d{1,3}(?:\.\d{1,3}){3})`)
@@ -113,6 +119,7 @@ func main() {
 
 	// Scan input line by line
 	scanner := bufio.NewScanner(os.Stdin)
+	count := 0
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -147,6 +154,12 @@ func main() {
 			}
 
 			uniqueEntries[srcIP[1]] = entry
+			count++
+
+			// Break if the limit is reached
+			if limit > 0 && count >= limit {
+				break
+			}
 		}
 	}
 
