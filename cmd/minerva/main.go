@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
 )
 
 // isExternalIP checks whether an IP address is outside private ranges.
@@ -31,20 +32,48 @@ func isExternalIP(ip string) bool {
 	return true // IP is external
 }
 
+// isSuspiciousLog checks if a log line indicates a potential threat.
+func isSuspiciousLog(line string) bool {
+	suspiciousReasons := []string{
+		"POLICY-INPUT-GEN-DISCARD",
+		"PORTSCAN",
+		"INTRUSION-DETECTED",
+		"MALFORMED-PACKET",
+	}
+
+	// Look for action=DROP and any suspicious reason
+	return strings.Contains(line, "action=DROP") &&
+		func() bool {
+			for _, reason := range suspiciousReasons {
+				if strings.Contains(line, reason) {
+					return true
+				}
+			}
+			return false
+		}()
+}
+
 func main() {
-	// Regex to match IP addresses
-	ipRegex := regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
+	// Regex to extract IP addresses
+	srcIPRegex := regexp.MustCompile(`SRC=(\d{1,3}(?:\.\d{1,3}){3})`)
 	uniqueIPs := make(map[string]bool)
 
 	// Scan input line by line
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		line := scanner.Text()
-		ips := ipRegex.FindAllString(line, -1)
-		for _, ip := range ips {
-			// Only add external IPs to the map
-			if isExternalIP(ip) {
-				uniqueIPs[ip] = true
+
+		// Check if the log line is suspicious
+		if !isSuspiciousLog(line) {
+			continue
+		}
+
+		// Extract the source IP (SRC)
+		matches := srcIPRegex.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			srcIP := matches[1]
+			if isExternalIP(srcIP) {
+				uniqueIPs[srcIP] = true
 			}
 		}
 	}
