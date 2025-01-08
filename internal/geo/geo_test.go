@@ -45,3 +45,45 @@ func TestFetchGeolocation(t *testing.T) {
 		t.Errorf("Expected ISP to be 'MockISP', got %q", geoData.ISP)
 	}
 }
+
+func TestFetchGeolocation_EdgeCases(t *testing.T) {
+	// Mock API server for different cases
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/192.0.2.1":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"country":"United States","regionName":"CA","city":"San Francisco","isp":"MockISP"}`))
+		case "/500-error":
+			w.WriteHeader(http.StatusInternalServerError)
+		case "/malformed-json":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"country":`)) // Incomplete JSON
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	// Replace API URL with mock server URL
+	originalURL := apiURL
+	apiURL = mockServer.URL
+	defer func() { apiURL = originalURL }()
+
+	tests := []struct {
+		ip        string
+		expectErr bool
+	}{
+		{"192.0.2.1", false},
+		{"500-error", true},
+		{"malformed-json", true},
+		{"", true},
+		{"invalid-ip", true},
+	}
+
+	for _, test := range tests {
+		_, err := FetchGeolocation(test.ip)
+		if (err != nil) != test.expectErr {
+			t.Errorf("FetchGeolocation(%q) error = %v, expectErr = %v", test.ip, err, test.expectErr)
+		}
+	}
+}
