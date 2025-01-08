@@ -9,6 +9,16 @@ import (
 	"strings"
 )
 
+// IPEntry represents information about a suspicious IP log entry.
+type IPEntry struct {
+	Timestamp       string
+	SourceIP        string
+	DestinationIP   string
+	SourcePort      string
+	DestinationPort string
+	Protocol        string
+}
+
 // isExternalIP checks whether an IP address is outside private ranges.
 func isExternalIP(ip string) bool {
 	privateRanges := []string{
@@ -54,9 +64,16 @@ func isSuspiciousLog(line string) bool {
 }
 
 func main() {
-	// Regex to extract IP addresses
+	// Regex patterns for various fields
+	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
 	srcIPRegex := regexp.MustCompile(`SRC=(\d{1,3}(?:\.\d{1,3}){3})`)
-	uniqueIPs := make(map[string]bool)
+	dstIPRegex := regexp.MustCompile(`DST=(\d{1,3}(?:\.\d{1,3}){3})`)
+	sptRegex := regexp.MustCompile(`SPT=(\d+)`)
+	dptRegex := regexp.MustCompile(`DPT=(\d+)`)
+	protoRegex := regexp.MustCompile(`PROTO=(\w+)`)
+
+	// Map to store unique entries
+	uniqueEntries := make(map[string]IPEntry)
 
 	// Scan input line by line
 	scanner := bufio.NewScanner(os.Stdin)
@@ -68,13 +85,25 @@ func main() {
 			continue
 		}
 
-		// Extract the source IP (SRC)
-		matches := srcIPRegex.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			srcIP := matches[1]
-			if isExternalIP(srcIP) {
-				uniqueIPs[srcIP] = true
+		// Extract fields
+		timestamp := timestampRegex.FindString(line)
+		srcIP := srcIPRegex.FindStringSubmatch(line)
+		dstIP := dstIPRegex.FindStringSubmatch(line)
+		spt := sptRegex.FindStringSubmatch(line)
+		dpt := dptRegex.FindStringSubmatch(line)
+		proto := protoRegex.FindStringSubmatch(line)
+
+		// Only process if source IP is valid and external
+		if len(srcIP) > 1 && isExternalIP(srcIP[1]) {
+			entry := IPEntry{
+				Timestamp:       timestamp,
+				SourceIP:        srcIP[1],
+				DestinationIP:   ifExists(dstIP),
+				SourcePort:      ifExists(spt),
+				DestinationPort: ifExists(dpt),
+				Protocol:        ifExists(proto),
 			}
+			uniqueEntries[srcIP[1]] = entry
 		}
 	}
 
@@ -83,8 +112,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Output unique external IPs
-	for ip := range uniqueIPs {
-		fmt.Println(ip)
+	// Output structured data
+	for _, entry := range uniqueEntries {
+		fmt.Printf("Time: %s | SRC: %s | DST: %s | SPT: %s | DPT: %s | PROTO: %s\n",
+			entry.Timestamp, entry.SourceIP, entry.DestinationIP,
+			entry.SourcePort, entry.DestinationPort, entry.Protocol)
 	}
+}
+
+// ifExists safely extracts the first element from a regex match or returns empty string.
+func ifExists(match []string) string {
+	if len(match) > 1 {
+		return match[1]
+	}
+	return ""
 }
