@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -32,6 +31,14 @@ type GeoData struct {
 	Region  string `json:"region,omitempty"`
 	City    string `json:"city,omitempty"`
 	ISP     string `json:"isp,omitempty"`
+}
+
+// ReverseSlice reverses the order of lines in a slice.
+func ReverseSlice(lines []string) []string {
+	for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+		lines[i], lines[j] = lines[j], lines[i]
+	}
+	return lines
 }
 
 // isExternalIP checks whether an IP address is outside private ranges.
@@ -67,7 +74,8 @@ func getGeolocation(ip string) (*GeoData, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body := make([]byte, resp.ContentLength)
+	_, err = resp.Body.Read(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body for IP %s: %w", ip, err)
 	}
@@ -111,6 +119,19 @@ func main() {
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
+	// Read input lines from stdin
+	var lines []string
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("Error reading stdin: %v", err)
+	}
+
+	// Reverse the lines for most recent entries
+	lines = ReverseSlice(lines)
+
 	// Regex patterns for various fields
 	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
 	srcIPRegex := regexp.MustCompile(`SRC=(\d{1,3}(?:\.\d{1,3}){3})`)
@@ -122,12 +143,9 @@ func main() {
 	// Slice to store results
 	var results []IPEntry
 
-	// Scan input line by line
-	scanner := bufio.NewScanner(os.Stdin)
+	// Process reversed lines
 	count := 0
-	for scanner.Scan() {
-		line := scanner.Text()
-
+	for _, line := range lines {
 		// Check if the log line is suspicious
 		if !isSuspiciousLog(line) {
 			continue
@@ -168,10 +186,6 @@ func main() {
 				break
 			}
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("Error reading input: %v", err)
 	}
 
 	// Output aggregated JSON data
