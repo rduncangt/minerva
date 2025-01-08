@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -62,18 +63,18 @@ func getGeolocation(ip string) (*GeoData, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch geolocation for IP %s: %w", ip, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response body for IP %s: %w", ip, err)
 	}
 
 	var geo GeoData
 	if err := json.Unmarshal(body, &geo); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse geolocation data for IP %s: %w", ip, err)
 	}
 
 	return &geo, nil
@@ -106,6 +107,10 @@ func main() {
 	flag.Parse()
 	limit := *limitFlag
 
+	// Initialize logger
+	log.SetOutput(os.Stderr)
+	log.Println("Starting log processing...")
+
 	// Regex patterns for various fields
 	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
 	srcIPRegex := regexp.MustCompile(`SRC=(\d{1,3}(?:\.\d{1,3}){3})`)
@@ -114,8 +119,8 @@ func main() {
 	dptRegex := regexp.MustCompile(`DPT=(\d+)`)
 	protoRegex := regexp.MustCompile(`PROTO=(\w+)`)
 
-	// Map to store unique entries
-	uniqueEntries := make(map[string]IPEntry)
+	// Slice to store results
+	var results []IPEntry
 
 	// Scan input line by line
 	scanner := bufio.NewScanner(os.Stdin)
@@ -149,11 +154,13 @@ func main() {
 
 			// Fetch geolocation data
 			geo, err := getGeolocation(srcIP[1])
-			if err == nil {
+			if err != nil {
+				log.Printf("Warning: %v", err)
+			} else {
 				entry.Geolocation = geo
 			}
 
-			uniqueEntries[srcIP[1]] = entry
+			results = append(results, entry)
 			count++
 
 			// Break if the limit is reached
@@ -164,19 +171,17 @@ func main() {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error reading input: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Error reading input: %v", err)
 	}
 
-	// Output structured data in JSON format
-	for _, entry := range uniqueEntries {
-		jsonData, err := json.MarshalIndent(entry, "", "  ")
-		if err != nil {
-			fmt.Printf("Error converting to JSON: %v\n", err)
-			continue
-		}
-		fmt.Println(string(jsonData))
+	// Output aggregated JSON data
+	jsonData, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to generate JSON output: %v", err)
 	}
+	fmt.Println(string(jsonData))
+
+	log.Println("Log processing completed.")
 }
 
 // ifExists safely extracts the first element from a regex match or returns empty string.
