@@ -67,7 +67,10 @@ func main() {
 	}
 
 	// Write results to JSON
-	output.WriteJSONOutput(results)
+	err = output.WriteJSONOutput(results, os.Stdout) // Updated to pass os.Stdout as the writer
+	if err != nil {
+		log.Fatalf("Error writing JSON output: %v", err)
+	}
 
 	log.Println("Log processing completed.")
 }
