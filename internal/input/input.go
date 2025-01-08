@@ -2,13 +2,13 @@ package input
 
 import (
 	"bufio"
-	"os"
+	"io"
 )
 
-// ReadLines reads all lines from stdin.
-func ReadLines() ([]string, error) {
+// ReadLines reads all lines from the provided reader.
+func ReadLines(r io.Reader) ([]string, error) {
 	var lines []string
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}

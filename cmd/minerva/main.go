@@ -22,10 +22,9 @@ func main() {
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
-	// Read input lines
-	lines, err := input.ReadLines()
+	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
-		log.Fatalf("Error reading stdin: %v", err)
+		log.Fatalf("Error reading input: %v", err)
 	}
 
 	// Reverse lines if not in oldest-first order
