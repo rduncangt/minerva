@@ -110,10 +110,12 @@ func isSuspiciousLog(line string) bool {
 }
 
 func main() {
-	// Add a flag for limiting the number of outputs
+	// Add flags for limiting the number of outputs and processing order
 	limitFlag := flag.Int("limit", -1, "Limit the number of results (-1 for no limit)")
+	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order (reverse default latest-first behavior)")
 	flag.Parse()
 	limit := *limitFlag
+	reverse := *reverseFlag
 
 	// Initialize logger
 	log.SetOutput(os.Stderr)
@@ -129,8 +131,10 @@ func main() {
 		log.Fatalf("Error reading stdin: %v", err)
 	}
 
-	// Reverse the lines for most recent entries
-	lines = ReverseSlice(lines)
+	// Reverse the lines if the reverse flag is NOT set (default: latest-first)
+	if !reverse {
+		lines = ReverseSlice(lines)
+	}
 
 	// Regex patterns for various fields
 	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
@@ -143,7 +147,7 @@ func main() {
 	// Slice to store results
 	var results []IPEntry
 
-	// Process reversed lines
+	// Process lines
 	count := 0
 	for _, line := range lines {
 		// Check if the log line is suspicious
