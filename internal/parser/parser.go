@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// isSuspiciousLog checks if a log line indicates a potential threat.
+// IsSuspiciousLog checks if a log line indicates a potential threat.
 func IsSuspiciousLog(line string) bool {
 	suspiciousReasons := []string{
 		"POLICY-INPUT-GEN-DISCARD",
@@ -29,15 +29,15 @@ func IsSuspiciousLog(line string) bool {
 // ExtractFields extracts fields of interest from a log line.
 func ExtractFields(line string) (string, string, string, string, string, string) {
 	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
-	srcIPRegex := regexp.MustCompile(`SRC=(\d{1,3}(?:\.\d{1,3}){3})`)
-	dstIPRegex := regexp.MustCompile(`DST=(\d{1,3}(?:\.\d{1,3}){3})`)
+	ipRegex := regexp.MustCompile(`SRC=(([0-9]{1,3}\.){3}[0-9]{1,3}|([a-fA-F0-9:]+))`)
+	dstRegex := regexp.MustCompile(`DST=(([0-9]{1,3}\.){3}[0-9]{1,3}|([a-fA-F0-9:]+))`)
 	sptRegex := regexp.MustCompile(`SPT=(\d+)`)
 	dptRegex := regexp.MustCompile(`DPT=(\d+)`)
 	protoRegex := regexp.MustCompile(`PROTO=(\w+)`)
 
 	timestamp := timestampRegex.FindString(line)
-	srcIP := getFirstGroup(srcIPRegex.FindStringSubmatch(line))
-	dstIP := getFirstGroup(dstIPRegex.FindStringSubmatch(line))
+	srcIP := getFirstGroup(ipRegex.FindStringSubmatch(line))
+	dstIP := getFirstGroup(dstRegex.FindStringSubmatch(line))
 	spt := getFirstGroup(sptRegex.FindStringSubmatch(line))
 	dpt := getFirstGroup(dptRegex.FindStringSubmatch(line))
 	proto := getFirstGroup(protoRegex.FindStringSubmatch(line))
@@ -45,6 +45,7 @@ func ExtractFields(line string) (string, string, string, string, string, string)
 	return timestamp, srcIP, dstIP, spt, dpt, proto
 }
 
+// getFirstGroup retrieves the first capturing group from a regex match.
 func getFirstGroup(match []string) string {
 	if len(match) > 1 {
 		return match[1]

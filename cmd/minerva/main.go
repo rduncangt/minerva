@@ -22,10 +22,9 @@ func main() {
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
-	// Read input lines
-	lines, err := input.ReadLines()
+	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
-		log.Fatalf("Error reading stdin: %v", err)
+		log.Fatalf("Error reading input: %v", err)
 	}
 
 	// Reverse lines if not in oldest-first order
@@ -68,7 +67,10 @@ func main() {
 	}
 
 	// Write results to JSON
-	output.WriteJSONOutput(results)
+	err = output.WriteJSONOutput(results, os.Stdout) // Updated to pass os.Stdout as the writer
+	if err != nil {
+		log.Fatalf("Error writing JSON output: %v", err)
+	}
 
 	log.Println("Log processing completed.")
 }

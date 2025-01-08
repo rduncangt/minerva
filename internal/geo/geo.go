@@ -4,31 +4,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 )
 
-// GeoData represents geolocation information for an IP.
+var apiURL = "http://ip-api.com/json" // Default URL for geolocation API
+
 type GeoData struct {
-	Country string `json:"country,omitempty"`
-	Region  string `json:"region,omitempty"`
-	City    string `json:"city,omitempty"`
-	ISP     string `json:"isp,omitempty"`
+	Country string `json:"country"`
+	Region  string `json:"regionName"`
+	City    string `json:"city"`
+	ISP     string `json:"isp"`
 }
 
-// FetchGeolocation fetches geolocation data for an IP address.
 func FetchGeolocation(ip string) (*GeoData, error) {
-	url := fmt.Sprintf("http://ip-api.com/json/%s", ip)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	// Construct the request URL with the given IP
+	url := fmt.Sprintf("%s/%s", apiURL, ip)
+
+	resp, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch geolocation for IP %s: %w", ip, err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var geo GeoData
-	if err := json.NewDecoder(resp.Body).Decode(&geo); err != nil {
-		return nil, fmt.Errorf("failed to parse geolocation data for IP %s: %w", ip, err)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status code %d", resp.StatusCode)
 	}
 
-	return &geo, nil
+	var geoData GeoData
+	if err := json.NewDecoder(resp.Body).Decode(&geoData); err != nil {
+		return nil, err
+	}
+	return &geoData, nil
 }
