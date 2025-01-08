@@ -2,21 +2,34 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // IPEntry represents information about a suspicious IP log entry.
 type IPEntry struct {
-	Timestamp       string
-	SourceIP        string
-	DestinationIP   string
-	SourcePort      string
-	DestinationPort string
-	Protocol        string
+	Timestamp       string   `json:"timestamp"`
+	SourceIP        string   `json:"source_ip"`
+	DestinationIP   string   `json:"destination_ip,omitempty"`
+	SourcePort      string   `json:"source_port,omitempty"`
+	DestinationPort string   `json:"destination_port,omitempty"`
+	Protocol        string   `json:"protocol,omitempty"`
+	Geolocation     *GeoData `json:"geolocation,omitempty"`
+}
+
+// GeoData represents geolocation information for an IP.
+type GeoData struct {
+	Country string `json:"country,omitempty"`
+	Region  string `json:"region,omitempty"`
+	City    string `json:"city,omitempty"`
+	ISP     string `json:"isp,omitempty"`
 }
 
 // isExternalIP checks whether an IP address is outside private ranges.
@@ -40,6 +53,29 @@ func isExternalIP(ip string) bool {
 	}
 
 	return true // IP is external
+}
+
+// getGeolocation fetches geolocation data for an IP address.
+func getGeolocation(ip string) (*GeoData, error) {
+	url := fmt.Sprintf("http://ip-api.com/json/%s", ip)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var geo GeoData
+	if err := json.Unmarshal(body, &geo); err != nil {
+		return nil, err
+	}
+
+	return &geo, nil
 }
 
 // isSuspiciousLog checks if a log line indicates a potential threat.
@@ -103,6 +139,13 @@ func main() {
 				DestinationPort: ifExists(dpt),
 				Protocol:        ifExists(proto),
 			}
+
+			// Fetch geolocation data
+			geo, err := getGeolocation(srcIP[1])
+			if err == nil {
+				entry.Geolocation = geo
+			}
+
 			uniqueEntries[srcIP[1]] = entry
 		}
 	}
@@ -112,11 +155,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Output structured data
+	// Output structured data in JSON format
 	for _, entry := range uniqueEntries {
-		fmt.Printf("Time: %s | SRC: %s | DST: %s | SPT: %s | DPT: %s | PROTO: %s\n",
-			entry.Timestamp, entry.SourceIP, entry.DestinationIP,
-			entry.SourcePort, entry.DestinationPort, entry.Protocol)
+		jsonData, err := json.MarshalIndent(entry, "", "  ")
+		if err != nil {
+			fmt.Printf("Error converting to JSON: %v\n", err)
+			continue
+		}
+		fmt.Println(string(jsonData))
 	}
 }
 
