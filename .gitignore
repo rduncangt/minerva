@@ -1,0 +1,13 @@
+# Ignore logs
+*.log
+
+# Ignore binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+
+# Ignore Go build artifacts
+bin/
+pkg/
