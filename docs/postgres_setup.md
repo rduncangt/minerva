@@ -197,7 +197,7 @@ CREATE TABLE ip_data (
 
    Expected output:
 
-   ```
+   ```text
    Database connection successful!
    ```
 
@@ -224,5 +224,7 @@ psql -U minerva_user -d minerva
 ```
 
 ---
+
+## Troubleshooting
 
 By following this guide, PostgreSQL should be fully set up and ready for use with Minerva.
