@@ -78,7 +78,6 @@ func main() {
 			}
 
 			if exists {
-				log.Printf("Skipping geolocation lookup for IP: %s (already in database)", srcIP)
 				duplicateCount++ // Increment duplicate count
 				continue
 			}
