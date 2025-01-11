@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"minerva/internal/geo"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
@@ -28,9 +27,6 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 }
 
 func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
-	// Debugging: Log entry data
-	log.Printf("Entry data: %+v", entry)
-
 	// Validate required fields
 	requiredFields := []string{"timestamp", "source_ip", "destination_ip", "protocol", "source_port", "destination_port", "geolocation"}
 	for _, field := range requiredFields {
@@ -69,11 +65,10 @@ func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
 	)
 
 	if err != nil {
-		log.Printf("Failed to insert data into database: %v", err)
-		return err
+		// Log only errors
+		return fmt.Errorf("failed to insert data into database: %w", err)
 	}
 
-	log.Println("Data inserted successfully (or duplicate skipped).")
 	return nil
 }
 

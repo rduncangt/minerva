@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"minerva/internal/db"
 	"minerva/internal/geo"
@@ -9,6 +10,7 @@ import (
 	"minerva/internal/output"
 	"minerva/internal/parser"
 	"os"
+	"time"
 )
 
 func main() {
@@ -22,6 +24,9 @@ func main() {
 	// Initialize logger
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
+
+	// Start execution timer
+	startTime := time.Now()
 
 	// Initialize database connection
 	database, err := db.Connect("localhost", "5432", "minerva_user", "secure_password", "minerva")
@@ -47,15 +52,22 @@ func main() {
 		lines = input.ReverseLines(lines)
 	}
 
+	// Statistics variables
+	totalRows := len(lines)
+	duplicateCount := 0
+	uniqueIPs := make(map[string]bool)
+
+	// Summary data
+	var summary []map[string]interface{}
+
 	// Process lines
-	var results []map[string]interface{}
 	count := 0
 	for _, line := range lines {
 		if !parser.IsSuspiciousLog(line) {
 			continue
 		}
 
-		timestamp, srcIP, dstIP, spt, dpt, proto := parser.ExtractFields(line)
+		timestamp, srcIP, _, spt, dpt, _ := parser.ExtractFields(line)
 		if srcIP == "" {
 			continue
 		}
@@ -71,7 +83,7 @@ func main() {
 			}
 
 			if exists {
-				log.Printf("Skipping geolocation lookup for IP: %s (already in database)", srcIP)
+				duplicateCount++ // Increment duplicate count
 				continue
 			}
 
@@ -86,24 +98,20 @@ func main() {
 			geoCache[srcIP] = geoData
 		}
 
-		entry := map[string]interface{}{
-			"timestamp":        timestamp,
-			"source_ip":        srcIP,
-			"destination_ip":   dstIP,
-			"source_port":      spt,
-			"destination_port": dpt,
-			"protocol":         proto,
-			"geolocation":      geoData,
-		}
+		// Mark IP as unique
+		uniqueIPs[srcIP] = true
 
-		// Insert data into the database
-		err = db.InsertIPData(database, entry)
-		if err != nil {
-			log.Printf("Error inserting data into database: %v", err)
-		}
-
-		// Add to results for JSON output
-		results = append(results, entry)
+		// Add to summary data
+		summary = append(summary, map[string]interface{}{
+			"date":           timestamp,
+			"source_ip":      srcIP,
+			"frequency":      1, // Increment as needed
+			"ports_targeted": fmt.Sprintf("%s:%s", spt, dpt),
+			"log_level":      "INFO",          // Placeholder
+			"action_taken":   "Processed",     // Placeholder
+			"geolocation":    geoData.Country, // Example field
+			"notes":          "",              // Placeholder
+		})
 
 		count++
 		if limit > 0 && count >= limit {
@@ -111,11 +119,19 @@ func main() {
 		}
 	}
 
-	// Write results to JSON
-	err = output.WriteJSONOutput(results, os.Stdout)
-	if err != nil {
-		log.Fatalf("Error writing JSON output: %v", err)
+	// Generate IP summary table
+	if err := output.WriteIPSummaryTable(summary, os.Stdout); err != nil {
+		log.Fatalf("Error writing IP summary table: %v", err)
 	}
+
+	// Calculate execution time
+	executionTime := time.Since(startTime)
+
+	// Log statistics
+	log.Printf("Execution time: %v", executionTime)
+	log.Printf("Total rows: %d", totalRows)
+	log.Printf("Duplicate rows: %d", duplicateCount)
+	log.Printf("Unique IPs: %d", len(uniqueIPs))
 
 	log.Println("Log processing completed.")
 }
