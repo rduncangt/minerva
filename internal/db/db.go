@@ -45,12 +45,13 @@ func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
 		return fmt.Errorf("geolocation field is not of type *geo.GeoData")
 	}
 
-	// SQL query
+	// SQL query with ON CONFLICT to skip duplicates
 	insertSQL := `
     INSERT INTO ip_data (
         timestamp, source_ip, destination_ip, protocol,
         source_port, destination_port, country, region, city, isp
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    ON CONFLICT ON CONSTRAINT unique_entry DO NOTHING;` // Avoid duplicates
 
 	// Execute the query
 	_, err := db.Exec(
@@ -72,7 +73,7 @@ func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
 		return err
 	}
 
-	log.Println("Data inserted successfully.")
+	log.Println("Data inserted successfully (or duplicate skipped).")
 	return nil
 }
 
