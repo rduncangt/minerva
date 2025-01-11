@@ -9,6 +9,7 @@ import (
 	"minerva/internal/output"
 	"minerva/internal/parser"
 	"os"
+	"time" // Added for execution time tracking
 )
 
 func main() {
@@ -22,6 +23,9 @@ func main() {
 	// Initialize logger
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
+
+	// Start execution timer
+	startTime := time.Now()
 
 	// Initialize database connection
 	database, err := db.Connect("localhost", "5432", "minerva_user", "secure_password", "minerva")
@@ -46,6 +50,11 @@ func main() {
 	if !reverse {
 		lines = input.ReverseLines(lines)
 	}
+
+	// Statistics variables
+	totalRows := len(lines)
+	duplicateCount := 0
+	uniqueIPs := make(map[string]bool)
 
 	// Process lines
 	var results []map[string]interface{}
@@ -72,6 +81,7 @@ func main() {
 
 			if exists {
 				log.Printf("Skipping geolocation lookup for IP: %s (already in database)", srcIP)
+				duplicateCount++ // Increment duplicate count
 				continue
 			}
 
@@ -85,6 +95,9 @@ func main() {
 			// Cache the fetched data
 			geoCache[srcIP] = geoData
 		}
+
+		// Mark IP as unique
+		uniqueIPs[srcIP] = true
 
 		entry := map[string]interface{}{
 			"timestamp":        timestamp,
@@ -116,6 +129,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error writing JSON output: %v", err)
 	}
+
+	// Calculate execution time
+	executionTime := time.Since(startTime)
+
+	// Log statistics
+	log.Printf("Execution time: %v", executionTime)
+	log.Printf("Total rows: %d", totalRows)
+	log.Printf("Duplicate rows: %d", duplicateCount)
+	log.Printf("Unique IPs: %d", len(uniqueIPs))
 
 	log.Println("Log processing completed.")
 }
