@@ -130,7 +130,10 @@ CREATE TABLE ip_data (
     country TEXT,
     region TEXT,
     city TEXT,
-    isp TEXT
+    isp TEXT,
+    CONSTRAINT unique_entry UNIQUE (
+        source_ip, destination_ip, protocol, source_port, destination_port, timestamp
+    )
 );
 ```
 
