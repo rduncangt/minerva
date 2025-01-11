@@ -6,10 +6,9 @@ import (
 	"minerva/internal/db"
 	"minerva/internal/geo"
 	"minerva/internal/input"
-	"minerva/internal/output"
 	"minerva/internal/parser"
 	"os"
-	"time" // Added for execution time tracking
+	"time"
 )
 
 func main() {
@@ -57,7 +56,6 @@ func main() {
 	uniqueIPs := make(map[string]bool)
 
 	// Process lines
-	var results []map[string]interface{}
 	count := 0
 	for _, line := range lines {
 		if !parser.IsSuspiciousLog(line) {
@@ -115,19 +113,10 @@ func main() {
 			log.Printf("Error inserting data into database: %v", err)
 		}
 
-		// Add to results for JSON output
-		results = append(results, entry)
-
 		count++
 		if limit > 0 && count >= limit {
 			break
 		}
-	}
-
-	// Write results to JSON
-	err = output.WriteJSONOutput(results, os.Stdout)
-	if err != nil {
-		log.Fatalf("Error writing JSON output: %v", err)
 	}
 
 	// Calculate execution time
