@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"minerva/internal/db"
 	"minerva/internal/geo"
 	"minerva/internal/input"
+	"minerva/internal/output"
 	"minerva/internal/parser"
 	"os"
 	"time"
@@ -55,6 +57,9 @@ func main() {
 	duplicateCount := 0
 	uniqueIPs := make(map[string]bool)
 
+	// Summary data
+	var summary []map[string]interface{}
+
 	// Process lines
 	count := 0
 	for _, line := range lines {
@@ -62,7 +67,7 @@ func main() {
 			continue
 		}
 
-		timestamp, srcIP, dstIP, spt, dpt, proto := parser.ExtractFields(line)
+		timestamp, srcIP, _, spt, dpt, _ := parser.ExtractFields(line)
 		if srcIP == "" {
 			continue
 		}
@@ -96,26 +101,27 @@ func main() {
 		// Mark IP as unique
 		uniqueIPs[srcIP] = true
 
-		entry := map[string]interface{}{
-			"timestamp":        timestamp,
-			"source_ip":        srcIP,
-			"destination_ip":   dstIP,
-			"source_port":      spt,
-			"destination_port": dpt,
-			"protocol":         proto,
-			"geolocation":      geoData,
-		}
-
-		// Insert data into the database
-		err = db.InsertIPData(database, entry)
-		if err != nil {
-			log.Printf("Error inserting data into database: %v", err)
-		}
+		// Add to summary data
+		summary = append(summary, map[string]interface{}{
+			"date":           timestamp,
+			"source_ip":      srcIP,
+			"frequency":      1, // Increment as needed
+			"ports_targeted": fmt.Sprintf("%s:%s", spt, dpt),
+			"log_level":      "INFO",          // Placeholder
+			"action_taken":   "Processed",     // Placeholder
+			"geolocation":    geoData.Country, // Example field
+			"notes":          "",              // Placeholder
+		})
 
 		count++
 		if limit > 0 && count >= limit {
 			break
 		}
+	}
+
+	// Generate IP summary table
+	if err := output.WriteIPSummaryTable(summary, os.Stdout); err != nil {
+		log.Fatalf("Error writing IP summary table: %v", err)
 	}
 
 	// Calculate execution time
