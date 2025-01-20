@@ -58,8 +58,6 @@ Optional flags:
 - `-limit`: Limit the number of entries to process (default: no limit).
 - `-r`: Process logs in reverse (oldest-first) order.
 
-```markdown
-
 ### SSH Configuration for Log Server
 
 To simplify SSH access to the log server, configure a name in your `~/.ssh/config` file. This allows you to reference the server using an alias instead of its IP address. Add the following lines to your `~/.ssh/config`:
