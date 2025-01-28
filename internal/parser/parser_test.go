@@ -94,19 +94,19 @@ func TestExtractFields_EdgeCases(t *testing.T) {
 		},
 		{
 			line:             "PROTO=UDP SPT=12345 DPT=443",
-			expectedSrcIP:    "",
-			expectedDstIP:    "",
+			expectedSrcIP:    "unknown",
+			expectedDstIP:    "unknown",
 			expectedSrcPort:  "12345",
 			expectedDstPort:  "443",
 			expectedProtocol: "UDP",
 		},
 		{
 			line:             "Invalid log entry",
-			expectedSrcIP:    "",
-			expectedDstIP:    "",
-			expectedSrcPort:  "",
-			expectedDstPort:  "",
-			expectedProtocol: "",
+			expectedSrcIP:    "unknown",
+			expectedDstIP:    "unknown",
+			expectedSrcPort:  "unknown",
+			expectedDstPort:  "unknown",
+			expectedProtocol: "unknown",
 		},
 		{
 			line:             "SRC=2001:0db8::ff00:42:8329 DST=2001:0db8::ff00:42:8329 PROTO=TCP SPT=12345 DPT=80",
@@ -150,7 +150,7 @@ func TestExtractFields_MissingFields(t *testing.T) {
 	}{
 		{
 			line:             "DST=192.0.2.2 PROTO=TCP SPT=12345 DPT=80",
-			expectedSrcIP:    "",
+			expectedSrcIP:    "unknown",
 			expectedDstIP:    "192.0.2.2",
 			expectedSrcPort:  "12345",
 			expectedDstPort:  "80",
@@ -159,8 +159,8 @@ func TestExtractFields_MissingFields(t *testing.T) {
 		{
 			line:             "SRC=192.0.2.1 PROTO=UDP DPT=443",
 			expectedSrcIP:    "192.0.2.1",
-			expectedDstIP:    "",
-			expectedSrcPort:  "",
+			expectedDstIP:    "unknown",
+			expectedSrcPort:  "unknown",
 			expectedDstPort:  "443",
 			expectedProtocol: "UDP",
 		},
@@ -169,8 +169,8 @@ func TestExtractFields_MissingFields(t *testing.T) {
 			expectedSrcIP:    "192.0.2.1",
 			expectedDstIP:    "192.0.2.2",
 			expectedSrcPort:  "54321",
-			expectedDstPort:  "",
-			expectedProtocol: "",
+			expectedDstPort:  "unknown",
+			expectedProtocol: "unknown",
 		},
 	}
 
@@ -210,7 +210,7 @@ func TestExtractFields_IPv6(t *testing.T) {
 		},
 		{
 			line:             "SRC=INVALID_IP DST=2001:0db8::1 PROTO=UDP",
-			expectedSrcIP:    "",
+			expectedSrcIP:    "unknown",
 			expectedDstIP:    "2001:0db8::1",
 			expectedProtocol: "UDP",
 		},
