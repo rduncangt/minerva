@@ -42,6 +42,26 @@ func ExtractFields(line string) (string, string, string, string, string, string)
 	dpt := getFirstGroup(dptRegex.FindStringSubmatch(line))
 	proto := getFirstGroup(protoRegex.FindStringSubmatch(line))
 
+	// Ensure empty strings are returned for missing fields
+	if timestamp == "" {
+		timestamp = "unknown"
+	}
+	if srcIP == "" {
+		srcIP = "unknown"
+	}
+	if dstIP == "" {
+		dstIP = "unknown"
+	}
+	if spt == "" {
+		spt = "unknown"
+	}
+	if dpt == "" {
+		dpt = "unknown"
+	}
+	if proto == "" {
+		proto = "unknown"
+	}
+
 	return timestamp, srcIP, dstIP, spt, dpt, proto
 }
 
