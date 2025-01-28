@@ -11,3 +11,5 @@
 # Ignore Go build artifacts
 bin/
 pkg/
+
+code_dump.md
