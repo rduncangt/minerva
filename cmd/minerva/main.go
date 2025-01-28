@@ -40,7 +40,7 @@ func main() {
 	}()
 
 	// Initialize in-memory cache for geolocation lookups
-	geoCache := make(map[string]*geo.GeoData)
+	geoCache := make(map[string]*geo.Data)
 
 	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
@@ -73,7 +73,7 @@ func main() {
 		}
 
 		// Check if IP exists in cache
-		var geoData *geo.GeoData
+		var geoData *geo.Data
 		var cached bool
 		if geoData, cached = geoCache[srcIP]; !cached {
 			// Check if IP exists in the database
