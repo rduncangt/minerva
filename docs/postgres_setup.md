@@ -226,6 +226,90 @@ brew services restart postgresql
 psql -U minerva_user -d minerva
 ```
 
+## 8. Setting Up the `minerva_test` Database
+
+This document outlines the steps to set up a clean test database (`minerva_test`) for the `minerva` project, ensuring it is ready for use with test code.
+
+---
+
+### Prerequisites
+
+- PostgreSQL is installed and running.
+- The `user` role exists and has superuser privileges.
+- The `minerva_user` role exists and is used for database operations within the project.
+- The `minerva` database is already set up with the necessary schema.
+
+---
+
+### Steps to Set Up the Test Database
+
+1. Connect to the PostgreSQL server using the `psql` command:
+
+   ```bash
+   psql -U <your_superuser> -d postgres
+   ```
+
+   Replace <your_superuser> with the username of a PostgreSQL role with superuser privileges.
+
+2. Create the `minerva_test` database and assign `minerva_user` as the owner:
+
+   ```sql
+    CREATE DATABASE minerva_test OWNER minerva_user;
+   ```
+
+3. Copy the Schema from minerva
+
+    Export the schema from the `minerva` database using `pg_dump`:
+
+   ```bash
+   pg_dump -h localhost -U <your_superuser> -s minerva > schema.sql
+   ```
+
+   - -s: Dumps only the schema (no data).
+
+   - minerva: Source database.
+
+   Import the schema into the `minerva_test` database:
+
+   ```bash
+   psql -h localhost -U <your_superuser> -d minerva_test -f schema.sql
+
+   ```
+
+4. Verify the Test Database
+
+    Connect to the `minerva_test` database:
+
+   ```bash
+   psql -U <your_superuser> -d minerva_test
+   ```
+
+   List the tables to confirm the schema is present:
+
+   ```sql
+   \dt+
+   ```
+
+   If no tables are listed, ensure the schema is public or specify the schema name explicitly,
+   e.g., `\dt public.*`.
+   Grant full privileges to `minerva_user` for the tables and sequences:
+
+   ```sql
+   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO minerva_user;
+   GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO minerva_user;
+   ```
+
+5. Update Your Test Code Configuration
+
+   Update your Go test code to connect to the `minerva_test` database. Example connection string:
+
+   ```go
+   dsn := "host=localhost port=5432 user=minerva_user password=secure_password dbname=minerva_test sslmode=disable"
+   db, err := sql.Open("postgres", dsn)
+   ```
+
+   Replace `secure_password` with the actual password for `minerva_user`.
+
 ---
 
 ## Troubleshooting
