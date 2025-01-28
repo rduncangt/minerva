@@ -37,9 +37,9 @@ func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
 	}
 
 	// Assert the type of geolocation
-	geoData, ok := entry["geolocation"].(*geo.GeoData)
+	geoData, ok := entry["geolocation"].(*geo.Data)
 	if !ok {
-		return fmt.Errorf("geolocation field is not of type *geo.GeoData")
+		return fmt.Errorf("geolocation field is not of type *geo.Data")
 	}
 
 	// SQL query with ON CONFLICT to skip duplicates
