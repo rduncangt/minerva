@@ -168,3 +168,75 @@ func TestInsertIPData(t *testing.T) {
 		})
 	}
 }
+
+func TestIsIPInDatabase(t *testing.T) {
+	// Set up a connection to the test database
+	db, err := Connect("localhost", "5432", "minerva_user", "secure_password", "minerva_test")
+	if err != nil {
+		t.Fatalf("Failed to connect to test database: %v", err)
+	}
+	defer db.Close()
+
+	// Clean the test table before running the test
+	_, err = db.Exec("TRUNCATE TABLE ip_data RESTART IDENTITY CASCADE;")
+	if err != nil {
+		t.Fatalf("Failed to truncate test table: %v", err)
+	}
+
+	// Test cases
+	tests := []struct {
+		name      string
+		setupData map[string]interface{}
+		ipToCheck string
+		expected  bool
+	}{
+		{
+			name: "IP exists in database",
+			setupData: map[string]interface{}{
+				"timestamp":        "2025-01-01T12:00:00",
+				"source_ip":        "192.0.2.1",
+				"destination_ip":   "198.51.100.1",
+				"protocol":         "TCP",
+				"source_port":      12345,
+				"destination_port": 80,
+				"geolocation": &geo.Data{
+					Country: "United States",
+					Region:  "California",
+					City:    "Los Angeles",
+					ISP:     "MockISP",
+				},
+			},
+			ipToCheck: "192.0.2.1",
+			expected:  true,
+		},
+		{
+			name:      "IP does not exist in database",
+			setupData: nil,
+			ipToCheck: "203.0.113.5",
+			expected:  false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Insert setup data into the database if provided
+			if test.setupData != nil {
+				err := InsertIPData(db, test.setupData)
+				if err != nil {
+					t.Fatalf("Failed to insert setup data: %v", err)
+				}
+			}
+
+			// Run the function under test
+			exists, err := IsIPInDatabase(db, test.ipToCheck)
+			if err != nil {
+				t.Fatalf("Error checking IP in database: %v", err)
+			}
+
+			// Verify the result
+			if exists != test.expected {
+				t.Errorf("Expected %v, got %v for IP %s", test.expected, exists, test.ipToCheck)
+			}
+		})
+	}
+}
