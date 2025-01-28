@@ -26,6 +26,7 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 	return db, nil
 }
 
+// InsertIPData inserts a new IP data record into the database. It skips insertion if a duplicate exists.
 func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
 	// Validate required fields
 	requiredFields := []string{"timestamp", "source_ip", "destination_ip", "protocol", "source_port", "destination_port", "geolocation"}
@@ -72,6 +73,7 @@ func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
 	return nil
 }
 
+// IsIPInDatabase checks whether the given IP address exists in the database.
 func IsIPInDatabase(db *sql.DB, ip string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM ip_data WHERE source_ip = $1 LIMIT 1)`
