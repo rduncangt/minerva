@@ -138,3 +138,59 @@ func TestExtractFields_EdgeCases(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractFields_MissingFields(t *testing.T) {
+	tests := []struct {
+		line             string
+		expectedSrcIP    string
+		expectedDstIP    string
+		expectedSrcPort  string
+		expectedDstPort  string
+		expectedProtocol string
+	}{
+		{
+			line:             "DST=192.0.2.2 PROTO=TCP SPT=12345 DPT=80",
+			expectedSrcIP:    "",
+			expectedDstIP:    "192.0.2.2",
+			expectedSrcPort:  "12345",
+			expectedDstPort:  "80",
+			expectedProtocol: "TCP",
+		},
+		{
+			line:             "SRC=192.0.2.1 PROTO=UDP DPT=443",
+			expectedSrcIP:    "192.0.2.1",
+			expectedDstIP:    "",
+			expectedSrcPort:  "",
+			expectedDstPort:  "443",
+			expectedProtocol: "UDP",
+		},
+		{
+			line:             "SRC=192.0.2.1 DST=192.0.2.2 SPT=54321",
+			expectedSrcIP:    "192.0.2.1",
+			expectedDstIP:    "192.0.2.2",
+			expectedSrcPort:  "54321",
+			expectedDstPort:  "",
+			expectedProtocol: "",
+		},
+	}
+
+	for _, test := range tests {
+		_, srcIP, dstIP, spt, dpt, proto := ExtractFields(test.line)
+
+		if srcIP != test.expectedSrcIP {
+			t.Errorf("Expected SRC IP %q, got %q", test.expectedSrcIP, srcIP)
+		}
+		if dstIP != test.expectedDstIP {
+			t.Errorf("Expected DST IP %q, got %q", test.expectedDstIP, dstIP)
+		}
+		if spt != test.expectedSrcPort {
+			t.Errorf("Expected SRC port %q, got %q", test.expectedSrcPort, spt)
+		}
+		if dpt != test.expectedDstPort {
+			t.Errorf("Expected DST port %q, got %q", test.expectedDstPort, dpt)
+		}
+		if proto != test.expectedProtocol {
+			t.Errorf("Expected protocol %q, got %q", test.expectedProtocol, proto)
+		}
+	}
+}
