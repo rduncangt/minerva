@@ -1,3 +1,7 @@
+<!-- markdownlint-disable MD041 -->
+
+![Minerva Logo](minerva_300px.png)
+
 # Minerva
 
 Minerva is a tool for processing, analyzing, and visualizing log data. It focuses on extracting meaningful insights from network logs, particularly suspicious activity, and includes functionality for geolocation lookups, database storage, and reporting.
