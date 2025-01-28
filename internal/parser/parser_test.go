@@ -194,3 +194,39 @@ func TestExtractFields_MissingFields(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractFields_IPv6(t *testing.T) {
+	tests := []struct {
+		line             string
+		expectedSrcIP    string
+		expectedDstIP    string
+		expectedProtocol string
+	}{
+		{
+			line:             "SRC=2001:0db8::1 DST=2001:0db8::2 PROTO=TCP",
+			expectedSrcIP:    "2001:0db8::1",
+			expectedDstIP:    "2001:0db8::2",
+			expectedProtocol: "TCP",
+		},
+		{
+			line:             "SRC=INVALID_IP DST=2001:0db8::1 PROTO=UDP",
+			expectedSrcIP:    "",
+			expectedDstIP:    "2001:0db8::1",
+			expectedProtocol: "UDP",
+		},
+	}
+
+	for _, test := range tests {
+		_, srcIP, dstIP, _, _, proto := ExtractFields(test.line)
+
+		if srcIP != test.expectedSrcIP {
+			t.Errorf("Expected SRC IP %q, got %q", test.expectedSrcIP, srcIP)
+		}
+		if dstIP != test.expectedDstIP {
+			t.Errorf("Expected DST IP %q, got %q", test.expectedDstIP, dstIP)
+		}
+		if proto != test.expectedProtocol {
+			t.Errorf("Expected protocol %q, got %q", test.expectedProtocol, proto)
+		}
+	}
+}
