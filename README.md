@@ -27,7 +27,7 @@ Minerva is a tool for processing, analyzing, and visualizing log data. It focuse
 1. Clone the repository:
 
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/rduncangt/minerva
    cd minerva
    ```
 
