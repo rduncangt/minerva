@@ -38,7 +38,10 @@
   - File or stream input issues.
 - [ ] Implement rate-limiting for external API calls.
 - [ ] Research and integrate additional data sources for geolocation or threat intelligence.
-
+- [ ] Add First Seen/Last Seen Timestamps to IP address intel
+- [ ] Integrate with threat intelligence APIs, AbuseIPDB, VirusTotal.
+  - Implement threat_score and/or malicious_flags column in table
+  
 ---
 
 ## Future Goals
