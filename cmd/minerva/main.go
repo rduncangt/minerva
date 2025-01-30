@@ -14,12 +14,10 @@ import (
 )
 
 func main() {
-	// Flags for limiting the number of outputs and reversing input order
+	// Command-line flags
 	limitFlag := flag.Int("limit", -1, "Limit the number of results (-1 for no limit)")
 	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order (reverse default latest-first behavior)")
 	flag.Parse()
-	limit := *limitFlag
-	reverse := *reverseFlag
 
 	// Initialize logger
 	log.SetOutput(os.Stderr)
@@ -33,79 +31,84 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer func() {
-		if err := database.Close(); err != nil {
-			log.Printf("Failed to close database connection: %v", err)
-		}
-	}()
+	defer database.Close()
 
-	// Initialize in-memory cache for geolocation lookups
+	// Initialize cache and summary
 	geoCache := make(map[string]*geo.Data)
-
 	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
 		log.Fatalf("Error reading input: %v", err)
 	}
-
-	// Reverse lines if not in oldest-first order
-	if !reverse {
+	if !*reverseFlag {
 		lines = input.ReverseLines(lines)
 	}
 
-	// Statistics variables
+	// Statistics
 	totalRows := len(lines)
 	duplicateCount := 0
 	uniqueIPs := make(map[string]bool)
 
-	// Summary data
-	var summary []map[string]interface{}
-
 	// Process lines
+	var summary []map[string]interface{}
 	count := 0
+
 	for _, line := range lines {
 		if !parser.IsSuspiciousLog(line) {
 			continue
 		}
 
-		timestamp, srcIP, _, spt, dpt, _ := parser.ExtractFields(line)
+		// Extract fields from the log line
+		timestamp, srcIP, dstIP, spt, dpt, proto := parser.ExtractFields(line)
 		if srcIP == "" {
 			continue
 		}
 
-		// Check if IP exists in cache
-		var geoData *geo.Data
-		var cached bool
-		if geoData, cached = geoCache[srcIP]; !cached {
-			// Check if IP exists in the database
-			exists, err := db.IsIPInDatabase(database, srcIP)
-			if err != nil {
-				log.Printf("Error checking IP in database: %v", err)
-			}
-
-			if exists {
-				duplicateCount++ // Increment duplicate count
-				continue
-			}
-
-			// Fetch geolocation data
-			geoData, err = geo.FetchGeolocation(srcIP)
-			if err != nil {
-				log.Printf("Warning: %v", err)
-				continue
-			}
-
-			// Cache the fetched data
-			geoCache[srcIP] = geoData
+		// Check if the IP is already processed
+		if _, cached := geoCache[srcIP]; cached {
+			duplicateCount++
+			continue
 		}
 
-		// Mark IP as unique
-		uniqueIPs[srcIP] = true
+		// Check if IP is in the database
+		exists, err := db.IsIPInDatabase(database, srcIP)
+		if err != nil {
+			log.Printf("Error checking IP in database: %v", err)
+			continue
+		}
+		if exists {
+			duplicateCount++
+			continue
+		}
+
+		// Fetch and cache geolocation data
+		geoData, err := geo.FetchGeolocation(srcIP)
+		if err != nil {
+			log.Printf("Warning: failed to fetch geolocation for %s: %v", srcIP, err)
+			continue
+		}
+		geoCache[srcIP] = geoData
+
+		// Insert the new record into the database
+		err = db.InsertIPData(database, map[string]interface{}{
+			"timestamp":        timestamp,
+			"source_ip":        srcIP,
+			"destination_ip":   dstIP,
+			"protocol":         proto,
+			"source_port":      spt,
+			"destination_port": dpt,
+			"geolocation":      geoData,
+		})
+		if err != nil {
+			log.Printf("Error inserting data for IP %s: %v", srcIP, err)
+			continue
+		}
 
 		// Add to summary data
+		uniqueIPs[srcIP] = true
 		summary = append(summary, map[string]interface{}{
 			"date":           timestamp,
 			"source_ip":      srcIP,
-			"frequency":      1, // Increment as needed
+			"frequency":      1, // Can be updated based on future needs
 			"ports_targeted": fmt.Sprintf("%s:%s", spt, dpt),
 			"log_level":      "INFO",          // Placeholder
 			"action_taken":   "Processed",     // Placeholder
@@ -113,25 +116,23 @@ func main() {
 			"notes":          "",              // Placeholder
 		})
 
+		// Enforce limit if specified
 		count++
-		if limit > 0 && count >= limit {
+		if *limitFlag > 0 && count >= *limitFlag {
 			break
 		}
 	}
 
-	// Generate IP summary table
+	// Generate output
 	if err := output.WriteIPSummaryTable(summary, os.Stdout); err != nil {
 		log.Fatalf("Error writing IP summary table: %v", err)
 	}
 
-	// Calculate execution time
+	// Log statistics and execution time
 	executionTime := time.Since(startTime)
-
-	// Log statistics
 	log.Printf("Execution time: %v", executionTime)
 	log.Printf("Total rows: %d", totalRows)
 	log.Printf("Duplicate rows: %d", duplicateCount)
 	log.Printf("Unique IPs: %d", len(uniqueIPs))
-
 	log.Println("Log processing completed.")
 }
