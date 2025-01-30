@@ -28,13 +28,14 @@ func (p *Progress) Processed() int64 {
 	return atomic.LoadInt64(&p.processedLines)
 }
 
-// Display shows the current progress as a percentage.
+// Display shows the current progress with a timestamp.
 func (p *Progress) Display() {
 	processed := p.Processed()
 	total := atomic.LoadInt64(&p.totalLines)
 	if total > 0 {
 		percentage := (float64(processed) / float64(total)) * 100
-		fmt.Printf("Progress: %.2f%% (%d/%d lines processed)\n", percentage, processed, total)
+		timestamp := time.Now().Format("2006-01-02 15:04:05")
+		fmt.Printf("%s - %.2f%% (%d/%d lines processed)\n", timestamp, percentage, processed, total)
 	}
 }
 
