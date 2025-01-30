@@ -9,6 +9,7 @@ import (
 	"minerva/internal/input"
 	"minerva/internal/output"
 	"minerva/internal/parser"
+	"minerva/internal/progress"
 	"os"
 	"sync"
 	"time"
@@ -43,22 +44,32 @@ func main() {
 		lines = input.ReverseLines(lines)
 	}
 
-	logChan := make(chan string, 100)
-	summaryChan := make(chan map[string]interface{}, 100)
+	// Initialize progress tracker
+	totalLines := len(lines)
+	prog := progress.NewProgress(totalLines)
+
+	logChan := make(chan string, 10000) // Increased buffer size
+	summaryChan := make(chan map[string]interface{}, 5000)
 	apiLimiter := time.NewTicker(time.Minute / 40)
 	var wg sync.WaitGroup
 
+	// Feed log lines to workers with pre-filtering
+	go func() {
+		for _, line := range lines {
+			if parser.IsSuspiciousLog(line) {
+				logChan <- line // Only pass relevant lines to the channel
+			}
+		}
+		close(logChan)
+	}()
+
 	// Worker pool to process logs
-	workerCount := 5
+	workerCount := 20 // Increased worker count for better concurrency
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			for line := range logChan {
-				if !parser.IsSuspiciousLog(line) {
-					continue
-				}
-
 				// Extract fields from the log line
 				timestamp, srcIP, dstIP, spt, dpt, proto := parser.ExtractFields(line)
 				if srcIP == "" {
@@ -106,20 +117,18 @@ func main() {
 				summaryChan <- map[string]interface{}{
 					"date":           timestamp,
 					"source_ip":      srcIP,
-					"ports_targeted": fmt.Sprintf("%s:%s", spt, dpt),
+					"ports_targeted": fmt.Sprintf("%d:%d", spt, dpt),
 					"geolocation":    geoData.Country,
+				}
+
+				// Update and display progress less frequently
+				prog.Increment()
+				if prog.Processed()%1000 == 0 {
+					prog.Display()
 				}
 			}
 		}(i)
 	}
-
-	// Feed log lines to workers
-	go func() {
-		for _, line := range lines {
-			logChan <- line
-		}
-		close(logChan)
-	}()
 
 	// Wait for all workers to finish
 	go func() {
@@ -140,6 +149,6 @@ func main() {
 	// Log statistics and execution time
 	executionTime := time.Since(startTime)
 	log.Printf("Execution time: %v", executionTime)
-	log.Printf("Total rows: %d", len(lines))
+	log.Printf("Total rows: %d", totalLines)
 	log.Println("Log processing completed.")
 }
