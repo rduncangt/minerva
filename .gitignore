@@ -12,4 +12,7 @@
 bin/
 pkg/
 
+# Do Not Ignore
+!*.sql
+
 code_dump.md
