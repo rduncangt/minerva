@@ -45,7 +45,7 @@ func main() {
 
 	logChan := make(chan string, 100)
 	summaryChan := make(chan map[string]interface{}, 100)
-	apiLimiter := time.NewTicker(time.Minute / 45)
+	apiLimiter := time.NewTicker(time.Minute / 40)
 	var wg sync.WaitGroup
 
 	// Worker pool to process logs
