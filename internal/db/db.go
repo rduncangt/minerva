@@ -3,10 +3,17 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"minerva/internal/geo"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
+
+// GeoData represents the geolocation information for an IP address.
+type GeoData struct {
+	Country string
+	Region  string
+	City    string
+	ISP     string
+}
 
 // Connect establishes a connection to the database and returns the *sql.DB instance.
 func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
@@ -50,7 +57,7 @@ func IsIPInGeoTable(db *sql.DB, ip string) (bool, error) {
 }
 
 // InsertOrUpdateGeoData inserts or updates geolocation data for an IP address.
-func InsertOrUpdateGeoData(db *sql.DB, ip string, geoData *geo.Data) error {
+func InsertOrUpdateGeoData(db *sql.DB, ip string, geoData *GeoData) error {
 	insertSQL := `
     INSERT INTO ip_geo (
         ip_address, country, region, city, isp, last_updated
