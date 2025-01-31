@@ -25,13 +25,18 @@ func IsSuspiciousLog(line string) bool {
 }
 
 // ExtractFields extracts fields of interest from a log line.
-func ExtractFields(line string) (string, string, string, int, int, string) {
+// ExtractFields extracts fields of interest from a log line.
+func ExtractFields(line string) (string, string, string, int, int, string, string, string, int, int) {
 	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
 	ipRegex := regexp.MustCompile(`SRC=(([0-9]{1,3}\.){3}[0-9]{1,3}|([a-fA-F0-9:]+))`)
 	dstRegex := regexp.MustCompile(`DST=(([0-9]{1,3}\.){3}[0-9]{1,3}|([a-fA-F0-9:]+))`)
 	sptRegex := regexp.MustCompile(`SPT=(\d+)`)
 	dptRegex := regexp.MustCompile(`DPT=(\d+)`)
 	protoRegex := regexp.MustCompile(`PROTO=(\w+)`)
+	actionRegex := regexp.MustCompile(`action=(\w+)`)
+	reasonRegex := regexp.MustCompile(`reason=([\w\-]+)`)
+	lengthRegex := regexp.MustCompile(`LEN=(\d+)`)
+	ttlRegex := regexp.MustCompile(`TTL=(\d+)`)
 
 	timestamp := timestampRegex.FindString(line)
 	srcIP := getFirstGroup(ipRegex.FindStringSubmatch(line))
@@ -39,9 +44,14 @@ func ExtractFields(line string) (string, string, string, int, int, string) {
 	spt := parsePort(sptRegex.FindStringSubmatch(line))
 	dpt := parsePort(dptRegex.FindStringSubmatch(line))
 	proto := getFirstGroup(protoRegex.FindStringSubmatch(line))
+	action := getFirstGroup(actionRegex.FindStringSubmatch(line))
+	reason := getFirstGroup(reasonRegex.FindStringSubmatch(line))
+	packetLength := parsePort(lengthRegex.FindStringSubmatch(line))
+	ttl := parsePort(ttlRegex.FindStringSubmatch(line))
 
-	// Ensure empty strings are returned for missing fields
-	return nonEmpty(timestamp, "unknown"), nonEmpty(srcIP, "unknown"), nonEmpty(dstIP, "unknown"), spt, dpt, nonEmpty(proto, "unknown")
+	return nonEmpty(timestamp, "unknown"), nonEmpty(srcIP, "unknown"), nonEmpty(dstIP, "unknown"),
+		spt, dpt, nonEmpty(proto, "unknown"), nonEmpty(action, "unknown"),
+		nonEmpty(reason, "unknown"), packetLength, ttl
 }
 
 // parsePort safely parses a port field. Returns 0 if missing or invalid.
