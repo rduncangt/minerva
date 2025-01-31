@@ -9,12 +9,14 @@ import (
 type Progress struct {
 	totalLines     int64
 	processedLines int64
+	lastDisplay    time.Time
 }
 
 // NewProgress initializes a new Progress tracker.
 func NewProgress(total int) *Progress {
 	return &Progress{
-		totalLines: int64(total),
+		totalLines:  int64(total),
+		lastDisplay: time.Now(),
 	}
 }
 
@@ -36,6 +38,15 @@ func (p *Progress) Display() {
 		percentage := (float64(processed) / float64(total)) * 100
 		timestamp := time.Now().Format("2006-01-02 15:04:05")
 		fmt.Printf("%s - %.2f%% (%d/%d lines processed)\n", timestamp, percentage, processed, total)
+	}
+}
+
+// DisplayIfNeeded only shows progress if a minimum interval has passed.
+func (p *Progress) DisplayIfNeeded(minInterval time.Duration) {
+	now := time.Now()
+	if now.Sub(p.lastDisplay) >= minInterval {
+		p.Display()
+		p.lastDisplay = now
 	}
 }
 
