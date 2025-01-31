@@ -26,57 +26,45 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 	return db, nil
 }
 
-// InsertIPData inserts a new IP data record into the database. It skips insertion if a duplicate exists.
-func InsertIPData(db *sql.DB, entry map[string]interface{}) error {
-	// Validate required fields
-	requiredFields := []string{"timestamp", "source_ip", "destination_ip", "protocol", "source_port", "destination_port", "geolocation"}
-	for _, field := range requiredFields {
-		if _, ok := entry[field]; !ok {
-			return fmt.Errorf("missing required field: %s", field)
-		}
-	}
-
-	// Assert the type of geolocation
-	geoData, ok := entry["geolocation"].(*geo.Data)
-	if !ok {
-		return fmt.Errorf("geolocation field is not of type *geo.Data")
-	}
-
-	// SQL query with ON CONFLICT to skip duplicates
+// InsertLogEntry inserts a new log entry into the log_data table.
+func InsertLogEntry(db *sql.DB, timestamp string, sourceIP, destinationIP, protocol string, sourcePort, destinationPort int) error {
 	insertSQL := `
-    INSERT INTO ip_data (
-        timestamp, source_ip, destination_ip, protocol,
-        source_port, destination_port, country, region, city, isp
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT ON CONSTRAINT unique_entry DO NOTHING;` // Avoid duplicates
+    INSERT INTO log_data (
+        timestamp, source_ip, destination_ip, protocol, source_port, destination_port
+    ) VALUES ($1, $2, $3, $4, $5, $6)
+    ON CONFLICT (timestamp, source_ip, destination_ip, protocol, source_port, destination_port) DO NOTHING;`
 
-	// Execute the query
-	_, err := db.Exec(
-		insertSQL,
-		entry["timestamp"],
-		entry["source_ip"],
-		entry["destination_ip"],
-		entry["protocol"],
-		entry["source_port"],
-		entry["destination_port"],
-		geoData.Country,
-		geoData.Region,
-		geoData.City,
-		geoData.ISP,
-	)
-
+	_, err := db.Exec(insertSQL, timestamp, sourceIP, destinationIP, protocol, sourcePort, destinationPort)
 	if err != nil {
-		// Log only errors
-		return fmt.Errorf("failed to insert data into database: %w", err)
+		return fmt.Errorf("failed to insert log entry: %w", err)
 	}
-
 	return nil
 }
 
-// IsIPInDatabase checks whether the given IP address exists in the database.
-func IsIPInDatabase(db *sql.DB, ip string) (bool, error) {
+// IsIPInGeoTable checks whether the given IP address exists in the ip_geo table.
+func IsIPInGeoTable(db *sql.DB, ip string) (bool, error) {
 	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ip_data WHERE source_ip = $1 LIMIT 1)`
+	query := `SELECT EXISTS(SELECT 1 FROM ip_geo WHERE ip_address = $1)`
 	err := db.QueryRow(query, ip).Scan(&exists)
 	return exists, err
+}
+
+// InsertOrUpdateGeoData inserts or updates geolocation data for an IP address.
+func InsertOrUpdateGeoData(db *sql.DB, ip string, geoData *geo.Data) error {
+	insertSQL := `
+    INSERT INTO ip_geo (
+        ip_address, country, region, city, isp, last_updated
+    ) VALUES ($1, $2, $3, $4, $5, NOW())
+    ON CONFLICT (ip_address) DO UPDATE SET 
+        country = EXCLUDED.country,
+        region = EXCLUDED.region,
+        city = EXCLUDED.city,
+        isp = EXCLUDED.isp,
+        last_updated = NOW();`
+
+	_, err := db.Exec(insertSQL, ip, geoData.Country, geoData.Region, geoData.City, geoData.ISP)
+	if err != nil {
+		return fmt.Errorf("failed to insert or update geolocation data: %w", err)
+	}
+	return nil
 }
