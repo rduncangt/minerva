@@ -27,14 +27,15 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 }
 
 // InsertLogEntry inserts a new log entry into the log_data table.
-func InsertLogEntry(db *sql.DB, timestamp string, sourceIP, destinationIP, protocol string, sourcePort, destinationPort int) error {
+// InsertLogEntry inserts a new log entry into the log_data table, including new fields.
+func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, action, reason string, sourcePort, destinationPort, packetLength, ttl int) error {
 	insertSQL := `
     INSERT INTO log_data (
-        timestamp, source_ip, destination_ip, protocol, source_port, destination_port
-    ) VALUES ($1, $2, $3, $4, $5, $6)
+        timestamp, source_ip, destination_ip, protocol, source_port, destination_port, action, reason, packet_length, ttl
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     ON CONFLICT (timestamp, source_ip, destination_ip, protocol, source_port, destination_port) DO NOTHING;`
 
-	_, err := db.Exec(insertSQL, timestamp, sourceIP, destinationIP, protocol, sourcePort, destinationPort)
+	_, err := db.Exec(insertSQL, timestamp, sourceIP, destinationIP, protocol, sourcePort, destinationPort, action, reason, packetLength, ttl)
 	if err != nil {
 		return fmt.Errorf("failed to insert log entry: %w", err)
 	}
