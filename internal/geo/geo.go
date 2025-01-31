@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 var apiURL = "http://ip-api.com/json" // Default URL for geolocation API
@@ -16,14 +17,17 @@ type Data struct {
 	ISP     string `json:"isp"`
 }
 
+// client is a reusable HTTP client with a timeout.
+var client = &http.Client{Timeout: 10 * time.Second}
+
 // FetchGeolocation retrieves geolocation data for the given IP address by querying the geolocation API.
 func FetchGeolocation(ip string) (*Data, error) {
 	// Construct the request URL with the given IP
 	url := fmt.Sprintf("%s/%s", apiURL, ip)
 
-	resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch geolocation data: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -33,7 +37,7 @@ func FetchGeolocation(ip string) (*Data, error) {
 
 	var geoData Data
 	if err := json.NewDecoder(resp.Body).Decode(&geoData); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode geolocation data: %w", err)
 	}
 	return &geoData, nil
 }
