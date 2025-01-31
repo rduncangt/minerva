@@ -3,17 +3,10 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"minerva/internal/geo"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
-
-// GeoData represents the geolocation information for an IP address.
-type GeoData struct {
-	Country string
-	Region  string
-	City    string
-	ISP     string
-}
 
 // Connect establishes a connection to the database and returns the *sql.DB instance.
 func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
@@ -48,16 +41,21 @@ func InsertLogEntry(db *sql.DB, timestamp string, sourceIP, destinationIP, proto
 	return nil
 }
 
+// DBHandler is a wrapper around *sql.DB that implements GeoDataHandler.
+type DBHandler struct {
+	DB *sql.DB
+}
+
 // IsIPInGeoTable checks whether the given IP address exists in the ip_geo table.
-func IsIPInGeoTable(db *sql.DB, ip string) (bool, error) {
+func (h *DBHandler) IsIPInGeoTable(ip string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM ip_geo WHERE ip_address = $1)`
-	err := db.QueryRow(query, ip).Scan(&exists)
+	err := h.DB.QueryRow(query, ip).Scan(&exists)
 	return exists, err
 }
 
 // InsertOrUpdateGeoData inserts or updates geolocation data for an IP address.
-func InsertOrUpdateGeoData(db *sql.DB, ip string, geoData *GeoData) error {
+func (h *DBHandler) InsertOrUpdateGeoData(ip string, geoData *geo.GeoData) error {
 	insertSQL := `
     INSERT INTO ip_geo (
         ip_address, country, region, city, isp, last_updated
@@ -69,7 +67,7 @@ func InsertOrUpdateGeoData(db *sql.DB, ip string, geoData *GeoData) error {
         isp = EXCLUDED.isp,
         last_updated = NOW();`
 
-	_, err := db.Exec(insertSQL, ip, geoData.Country, geoData.Region, geoData.City, geoData.ISP)
+	_, err := h.DB.Exec(insertSQL, ip, geoData.Country, geoData.Region, geoData.City, geoData.ISP)
 	if err != nil {
 		return fmt.Errorf("failed to insert or update geolocation data: %w", err)
 	}
