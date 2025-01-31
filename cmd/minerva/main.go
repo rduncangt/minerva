@@ -69,13 +69,14 @@ func main() {
 		go func(id int) {
 			defer wg.Done()
 			for line := range logChan {
-				timestamp, srcIP, dstIP, spt, dpt, proto := parser.ExtractFields(line)
+				// Extract all fields from the log line
+				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl := parser.ExtractFields(line)
 				if srcIP == "" {
 					continue
 				}
 
-				// Insert log data
-				err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, spt, dpt)
+				// Insert log data with the new fields
+				err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl)
 				if err != nil {
 					log.Printf("Error inserting log entry: %v", err)
 				}
