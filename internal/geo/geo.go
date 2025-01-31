@@ -3,6 +3,7 @@ package geo
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -22,7 +23,6 @@ var client = &http.Client{Timeout: 10 * time.Second}
 
 // FetchGeolocation retrieves geolocation data for the given IP address by querying the geolocation API.
 func FetchGeolocation(ip string) (*Data, error) {
-	// Construct the request URL with the given IP
 	url := fmt.Sprintf("%s/%s", apiURL, ip)
 
 	resp, err := client.Get(url)
@@ -40,4 +40,36 @@ func FetchGeolocation(ip string) (*Data, error) {
 		return nil, fmt.Errorf("failed to decode geolocation data: %w", err)
 	}
 	return &geoData, nil
+}
+
+// ProcessGeoData handles inserting or updating the fetched geolocation data into the database.
+type GeoDataHandler interface {
+	IsIPInGeoTable(ip string) (bool, error)
+	InsertOrUpdateGeoData(ip string, geoData *Data) error
+}
+
+// ProcessIP handles the full lifecycle of fetching and storing geolocation data for an IP.
+func ProcessIP(handler GeoDataHandler, ip string) {
+	// Check if the IP already exists in the ip_geo table
+	exists, err := handler.IsIPInGeoTable(ip)
+	if err != nil {
+		log.Printf("Error checking IP in geo table: %v", err)
+		return
+	}
+	if exists {
+		return
+	}
+
+	// Fetch geolocation data
+	geoData, err := FetchGeolocation(ip)
+	if err != nil {
+		log.Printf("Error fetching geolocation for IP %s: %v", ip, err)
+		return
+	}
+
+	// Insert or update geolocation data
+	err = handler.InsertOrUpdateGeoData(ip, geoData)
+	if err != nil {
+		log.Printf("Error inserting/updating geolocation data for IP %s: %v", ip, err)
+	}
 }
