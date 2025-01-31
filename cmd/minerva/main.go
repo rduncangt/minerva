@@ -2,12 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"minerva/internal/db"
 	"minerva/internal/geo"
 	"minerva/internal/input"
-	"minerva/internal/output"
 	"minerva/internal/parser"
 	"minerva/internal/progress"
 	"os"
@@ -34,8 +32,10 @@ func main() {
 	}
 	defer database.Close()
 
-	// Initialize cache and channels
-	geoCache := make(map[string]*geo.Data)
+	// Create a database handler for geolocation operations
+	dbHandler := &db.DBHandler{DB: database}
+
+	// Read and reverse input lines if necessary
 	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
 		log.Fatalf("Error reading input: %v", err)
@@ -48,84 +48,44 @@ func main() {
 	totalLines := len(lines)
 	prog := progress.NewProgress(totalLines)
 
-	logChan := make(chan string, 10000) // Increased buffer size
-	summaryChan := make(chan map[string]interface{}, 5000)
-	apiLimiter := time.NewTicker(time.Minute / 40)
-	var wg sync.WaitGroup
+	logChan := make(chan string, 10000)
+	doneChan := make(chan struct{})
 
-	// Feed log lines to workers with pre-filtering
+	// Pre-filter and feed log lines to workers
 	go func() {
 		for _, line := range lines {
 			if parser.IsSuspiciousLog(line) {
-				logChan <- line // Only pass relevant lines to the channel
+				logChan <- line
 			}
 		}
 		close(logChan)
 	}()
 
-	// Worker pool to process logs
-	workerCount := 20 // Increased worker count for better concurrency
+	// Worker pool for log processing
+	workerCount := 20
+	var wg sync.WaitGroup
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 			for line := range logChan {
-				// Extract fields from the log line
 				timestamp, srcIP, dstIP, spt, dpt, proto := parser.ExtractFields(line)
 				if srcIP == "" {
 					continue
 				}
 
-				// Check if IP is already in cache or database
-				if _, cached := geoCache[srcIP]; cached {
-					continue
-				}
-				exists, err := db.IsIPInDatabase(database, srcIP)
+				// Insert log data
+				err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, spt, dpt)
 				if err != nil {
-					log.Printf("Error checking IP in database: %v", err)
-					continue
-				}
-				if exists {
-					continue
+					log.Printf("Error inserting log entry: %v", err)
 				}
 
-				// Fetch and cache geolocation data with API rate limiting
-				<-apiLimiter.C
-				geoData, err := geo.FetchGeolocation(srcIP)
-				if err != nil {
-					log.Printf("Warning: failed to fetch geolocation for %s: %v", srcIP, err)
-					continue
-				}
-				geoCache[srcIP] = geoData
+				// Queue IP for geolocation lookup (handled by a separate process)
+				geo.ProcessIP(dbHandler, srcIP)
 
-				// Insert the new record into the database
-				err = db.InsertIPData(database, map[string]interface{}{
-					"timestamp":        timestamp,
-					"source_ip":        srcIP,
-					"destination_ip":   dstIP,
-					"protocol":         proto,
-					"source_port":      spt,
-					"destination_port": dpt,
-					"geolocation":      geoData,
-				})
-				if err != nil {
-					log.Printf("Error inserting data for IP %s: %v", srcIP, err)
-					continue
-				}
-
-				// Add to summary
-				summaryChan <- map[string]interface{}{
-					"date":           timestamp,
-					"source_ip":      srcIP,
-					"ports_targeted": fmt.Sprintf("%d:%d", spt, dpt),
-					"geolocation":    geoData.Country,
-				}
-
-				// Update and display progress less frequently
+				// Update progress
 				prog.Increment()
-				if prog.Processed()%1000 == 0 {
-					prog.Display()
-				}
+				prog.DisplayIfNeeded(1 * time.Second)
 			}
 		}(i)
 	}
@@ -133,22 +93,15 @@ func main() {
 	// Wait for all workers to finish
 	go func() {
 		wg.Wait()
-		close(summaryChan)
+		close(doneChan)
 	}()
 
-	// Collect and write summary output
-	var summary []map[string]interface{}
-	for entry := range summaryChan {
-		summary = append(summary, entry)
-	}
-
-	if err := output.WriteIPSummaryTable(summary, os.Stdout); err != nil {
-		log.Fatalf("Error writing IP summary table: %v", err)
-	}
+	// Start periodic progress updates
+	prog.StartPeriodicDisplay(5*time.Second, doneChan)
 
 	// Log statistics and execution time
 	executionTime := time.Since(startTime)
 	log.Printf("Execution time: %v", executionTime)
-	log.Printf("Total rows: %d", totalLines)
+	log.Printf("Total rows processed: %d", totalLines)
 	log.Println("Log processing completed.")
 }
