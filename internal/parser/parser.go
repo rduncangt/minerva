@@ -16,15 +16,12 @@ func IsSuspiciousLog(line string) bool {
 	}
 
 	// Look for action=DROP and any suspicious reason
-	return strings.Contains(line, "action=DROP") &&
-		func() bool {
-			for _, reason := range suspiciousReasons {
-				if strings.Contains(line, reason) {
-					return true
-				}
-			}
-			return false
-		}()
+	for _, reason := range suspiciousReasons {
+		if strings.Contains(line, "action=DROP") && strings.Contains(line, reason) {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractFields extracts fields of interest from a log line.
@@ -44,27 +41,13 @@ func ExtractFields(line string) (string, string, string, int, int, string) {
 	proto := getFirstGroup(protoRegex.FindStringSubmatch(line))
 
 	// Ensure empty strings are returned for missing fields
-	if timestamp == "" {
-		timestamp = "unknown"
-	}
-	if srcIP == "" {
-		srcIP = "unknown"
-	}
-	if dstIP == "" {
-		dstIP = "unknown"
-	}
-	if proto == "" {
-		proto = "unknown"
-	}
-
-	return timestamp, srcIP, dstIP, spt, dpt, proto
+	return nonEmpty(timestamp, "unknown"), nonEmpty(srcIP, "unknown"), nonEmpty(dstIP, "unknown"), spt, dpt, nonEmpty(proto, "unknown")
 }
 
 // parsePort safely parses a port field. Returns 0 if missing or invalid.
 func parsePort(match []string) int {
 	if len(match) > 1 {
-		port := match[1]
-		return atoiSafe(port)
+		return atoiSafe(match[1])
 	}
 	return 0
 }
@@ -84,4 +67,12 @@ func getFirstGroup(match []string) string {
 		return match[1]
 	}
 	return ""
+}
+
+// nonEmpty returns the default value if the input is an empty string.
+func nonEmpty(input, defaultValue string) string {
+	if input == "" {
+		return defaultValue
+	}
+	return input
 }
