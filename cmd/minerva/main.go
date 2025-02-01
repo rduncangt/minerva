@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const maxGeoQueriesPerMinute = 40 // Throttle below API limit of 45 per minute
+
 func main() {
 	// Command-line flags
 	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order (reverse default latest-first behavior)")
@@ -49,6 +51,7 @@ func main() {
 	prog := progress.NewProgress(totalLines)
 
 	logChan := make(chan string, 10000)
+	geoChan := make(chan string, 100) // Separate channel for geo lookups
 	doneChan := make(chan struct{})
 
 	// Pre-filter and feed log lines to workers
@@ -81,8 +84,8 @@ func main() {
 					log.Printf("Error inserting log entry: %v", err)
 				}
 
-				// Queue IP for geolocation lookup (handled by a separate process)
-				geo.ProcessIP(dbHandler, srcIP)
+				// Queue IP for geolocation lookup
+				geoChan <- srcIP
 
 				// Update progress
 				prog.Increment()
@@ -91,10 +94,22 @@ func main() {
 		}(i)
 	}
 
+	// Geo lookup worker with throttling
+	go func() {
+		ticker := time.NewTicker(time.Minute / time.Duration(maxGeoQueriesPerMinute))
+		defer ticker.Stop()
+
+		for ip := range geoChan {
+			<-ticker.C
+			geo.ProcessIP(dbHandler, ip)
+		}
+	}()
+
 	// Wait for all workers to finish
 	go func() {
 		wg.Wait()
 		close(doneChan)
+		close(geoChan) // Close geoChan when log workers are done
 	}()
 
 	// Start periodic progress updates
