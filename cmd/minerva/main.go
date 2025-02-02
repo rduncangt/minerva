@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"minerva/internal/db"
@@ -15,29 +16,33 @@ import (
 
 const maxGeoQueriesPerMinute = 40 // Throttle below API limit of 45 per minute
 
+// PipelineSummary holds the info we'll print as JSON
+type PipelineSummary struct {
+	TotalLines          int `json:"total_lines"`
+	SuspiciousLines     int `json:"suspicious_lines"`
+	SuccessfullyInserts int `json:"successful_inserts"`
+}
+
 func main() {
-	// Command-line flags
-	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order (reverse default latest-first behavior)")
+	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order")
 	flag.Parse()
 
-	// Initialize logger
+	// Log to stderr so it's separate from JSON we write to stdout.
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
-	// Start execution timer
 	startTime := time.Now()
 
-	// Initialize database connection
+	// Connect to DB
 	database, err := db.Connect("localhost", "5432", "minerva_user", "secure_password", "minerva")
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer database.Close()
 
-	// Create a database handler for geolocation operations
 	dbHandler := &db.DBHandler{DB: database}
 
-	// Read and reverse input lines if necessary
+	// Read input
 	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
 		log.Fatalf("Error reading input: %v", err)
@@ -46,78 +51,90 @@ func main() {
 		lines = input.ReverseLines(lines)
 	}
 
-	// Initialize progress tracker
 	totalLines := len(lines)
 	prog := progress.NewProgress(totalLines)
 
 	logChan := make(chan string, 10000)
-	geoChan := make(chan string, 100) // Separate channel for geo lookups
+	geoChan := make(chan string, 100)
 	doneChan := make(chan struct{})
 
-	// Pre-filter and feed log lines to workers
+	// We'll track suspicious lines and successful inserts
+	var suspiciousCount int
+	var successfulInserts int
+
+	// Pre-filter suspicious logs
 	go func() {
 		for _, line := range lines {
 			if parser.IsSuspiciousLog(line) {
+				suspiciousCount++
 				logChan <- line
 			}
 		}
 		close(logChan)
 	}()
 
-	// Worker pool for log processing
+	// Worker pool
 	workerCount := 20
 	var wg sync.WaitGroup
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go func(id int) {
+		go func() {
 			defer wg.Done()
 			for line := range logChan {
-				// Extract all fields from the log line
-				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl := parser.ExtractFields(line)
-				if srcIP == "" {
-					continue
-				}
+				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl :=
+					parser.ExtractFields(line)
 
-				// Insert log data with the new fields
-				err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl)
-				if err != nil {
+				// Attempt insert
+				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err == nil {
+					successfulInserts++
+				} else {
+					// Log insertion errors but continue
 					log.Printf("Error inserting log entry: %v", err)
 				}
 
-				// Queue IP for geolocation lookup
+				// Queue IP for geolocation
 				geoChan <- srcIP
 
-				// Update progress
+				// Track progress
 				prog.Increment()
 				prog.DisplayIfNeeded(1 * time.Second)
 			}
-		}(i)
+		}()
 	}
 
-	// Geo lookup worker with throttling
+	// Geo lookups with throttling
 	go func() {
 		ticker := time.NewTicker(time.Minute / time.Duration(maxGeoQueriesPerMinute))
 		defer ticker.Stop()
-
 		for ip := range geoChan {
 			<-ticker.C
 			geo.ProcessIP(dbHandler, ip)
 		}
 	}()
 
-	// Wait for all workers to finish
+	// Close channels once workers finish
 	go func() {
 		wg.Wait()
 		close(doneChan)
-		close(geoChan) // Close geoChan when log workers are done
+		close(geoChan)
 	}()
 
-	// Start periodic progress updates
+	// Periodic progress
 	prog.StartPeriodicDisplay(5*time.Second, doneChan)
 
-	// Log statistics and execution time
+	// Final logs
 	executionTime := time.Since(startTime)
 	log.Printf("Execution time: %v", executionTime)
 	log.Printf("Total rows processed: %d", totalLines)
 	log.Println("Log processing completed.")
+
+	// Output JSON summary to stdout for the test
+	summary := PipelineSummary{
+		TotalLines:          totalLines,
+		SuspiciousLines:     suspiciousCount,
+		SuccessfullyInserts: successfulInserts,
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
+		log.Printf("Failed to encode summary JSON: %v", err)
+	}
 }
