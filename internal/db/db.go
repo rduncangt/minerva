@@ -26,16 +26,40 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 	return db, nil
 }
 
-// InsertLogEntry inserts a new log entry into the log_data table.
 // InsertLogEntry inserts a new log entry into the log_data table, including new fields.
-func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, action, reason string, sourcePort, destinationPort, packetLength, ttl int) error {
-	insertSQL := `
-    INSERT INTO log_data (
-        timestamp, source_ip, destination_ip, protocol, source_port, destination_port, action, reason, packet_length, ttl
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT (timestamp, source_ip, destination_ip, protocol, source_port, destination_port) DO NOTHING;`
+func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, action, reason string,
+	sourcePort, destinationPort, packetLength, ttl int) error {
 
-	_, err := db.Exec(insertSQL, timestamp, sourceIP, destinationIP, protocol, sourcePort, destinationPort, action, reason, packetLength, ttl)
+	// Basic validation to enforce mandatory fields.
+	// If these are truly required in your schema, return an error rather than inserting "unknown."
+	if timestamp == "unknown" {
+		return fmt.Errorf("invalid timestamp")
+	}
+	if destinationIP == "" || destinationIP == "unknown" {
+		return fmt.Errorf("invalid destination IP")
+	}
+
+	insertSQL := `
+        INSERT INTO log_data (
+            timestamp, source_ip, destination_ip, protocol,
+            source_port, destination_port, action, reason,
+            packet_length, ttl
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (timestamp, source_ip, destination_ip, protocol, source_port, destination_port)
+        DO NOTHING;
+    `
+	_, err := db.Exec(insertSQL,
+		timestamp,
+		sourceIP,
+		destinationIP,
+		protocol,
+		sourcePort,
+		destinationPort,
+		action,
+		reason,
+		packetLength,
+		ttl,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to insert log entry: %w", err)
 	}
