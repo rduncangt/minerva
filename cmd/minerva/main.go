@@ -11,6 +11,7 @@ import (
 	"minerva/internal/progress"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,23 +52,27 @@ func main() {
 		lines = input.ReverseLines(lines)
 	}
 
+	// Create a stats object to hold counters
+	stats := &progress.Stats{}
 	totalLines := len(lines)
-	prog := progress.NewProgress(totalLines)
+
+	// Create a Progress tracker with the stats reference
+	prog := progress.NewProgress(totalLines, stats)
 
 	logChan := make(chan string, 10000)
 	geoChan := make(chan string, 100)
 	doneChan := make(chan struct{})
 
-	// We'll track suspicious lines and successful inserts
-	var suspiciousCount int
-	var successfulInserts int
-
 	// Pre-filter suspicious logs
 	go func() {
 		for _, line := range lines {
 			if parser.IsSuspiciousLog(line) {
-				suspiciousCount++
+				// Increment the suspicious counter instead of a local variable
+				stats.IncrementSuspicious()
 				logChan <- line
+			} else {
+				// If you’d like to track non-suspicious logs, uncomment:
+				// stats.IncrementNonRelevant()
 			}
 		}
 		close(logChan)
@@ -76,6 +81,10 @@ func main() {
 	// Worker pool
 	workerCount := 20
 	var wg sync.WaitGroup
+
+	// We'll introduce a new stat for successful inserts. Add it to the Stats struct if you like:
+	var insertSuccesses int64 // atomic counter for inserts
+
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func() {
@@ -86,7 +95,7 @@ func main() {
 
 				// Attempt insert
 				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err == nil {
-					successfulInserts++
+					atomic.AddInt64(&insertSuccesses, 1) // increment success
 				} else {
 					// Log insertion errors but continue
 					log.Printf("Error inserting log entry: %v", err)
@@ -95,7 +104,7 @@ func main() {
 				// Queue IP for geolocation
 				geoChan <- srcIP
 
-				// Track progress
+				// Track overall line progress
 				prog.Increment()
 				prog.DisplayIfNeeded(1 * time.Second)
 			}
@@ -131,9 +140,10 @@ func main() {
 	// Output JSON summary to stdout for the test
 	summary := PipelineSummary{
 		TotalLines:          totalLines,
-		SuspiciousLines:     suspiciousCount,
-		SuccessfullyInserts: successfulInserts,
+		SuspiciousLines:     int(atomic.LoadInt64(&stats.SuspiciousLines)),
+		SuccessfullyInserts: int(atomic.LoadInt64(&insertSuccesses)),
 	}
+
 	if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
 		log.Printf("Failed to encode summary JSON: %v", err)
 	}
