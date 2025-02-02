@@ -25,9 +25,11 @@ func IsSuspiciousLog(line string) bool {
 }
 
 // ExtractFields extracts fields of interest from a log line.
-// ExtractFields extracts fields of interest from a log line.
 func ExtractFields(line string) (string, string, string, int, int, string, string, string, int, int) {
-	timestampRegex := regexp.MustCompile(`^\S+`) // First word as timestamp
+	// Updated regex to handle fractional seconds and optional offset
+	// Example: 2025-01-05T00:01:08.143626-05:00 or 2025-01-05T00:01:08Z
+	timestampRegex := regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+\-]\d{2}:\d{2}|Z)?\b`)
+
 	ipRegex := regexp.MustCompile(`SRC=(([0-9]{1,3}\.){3}[0-9]{1,3}|([a-fA-F0-9:]+))`)
 	dstRegex := regexp.MustCompile(`DST=(([0-9]{1,3}\.){3}[0-9]{1,3}|([a-fA-F0-9:]+))`)
 	sptRegex := regexp.MustCompile(`SPT=(\d+)`)
@@ -49,12 +51,19 @@ func ExtractFields(line string) (string, string, string, int, int, string, strin
 	packetLength := parsePort(lengthRegex.FindStringSubmatch(line))
 	ttl := parsePort(ttlRegex.FindStringSubmatch(line))
 
-	return nonEmpty(timestamp, "unknown"), nonEmpty(srcIP, "unknown"), nonEmpty(dstIP, "unknown"),
-		spt, dpt, nonEmpty(proto, "unknown"), nonEmpty(action, "unknown"),
-		nonEmpty(reason, "unknown"), packetLength, ttl
+	return nonEmpty(timestamp, "unknown"),
+		nonEmpty(srcIP, "unknown"),
+		nonEmpty(dstIP, "unknown"),
+		spt,
+		dpt,
+		nonEmpty(proto, "unknown"),
+		nonEmpty(action, "unknown"),
+		nonEmpty(reason, "unknown"),
+		packetLength,
+		ttl
 }
 
-// parsePort safely parses a port field. Returns 0 if missing or invalid.
+// parsePort safely parses a port or numeric field. Returns 0 if missing or invalid.
 func parsePort(match []string) int {
 	if len(match) > 1 {
 		return atoiSafe(match[1])
