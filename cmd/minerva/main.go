@@ -22,13 +22,14 @@ type PipelineSummary struct {
 	TotalLines          int `json:"total_lines"`
 	SuspiciousLines     int `json:"suspicious_lines"`
 	SuccessfullyInserts int `json:"successful_inserts"`
+	NewIPs              int `json:"new_ips"` // If you'd like to output how many new IPs were geolocated
 }
 
 func main() {
 	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order")
 	flag.Parse()
 
-	// Log to stderr so it's separate from JSON we write to stdout.
+	// Log to stderr so it's separate from any JSON on stdout.
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
@@ -52,26 +53,35 @@ func main() {
 		lines = input.ReverseLines(lines)
 	}
 
-	// Create a stats object to hold counters
+	// Create a stats object to hold counters (from progress package)
 	stats := &progress.Stats{}
 	totalLines := len(lines)
 
-	// Create a Progress tracker with the stats reference
+	// Create a Progress tracker with the Stats reference
 	prog := progress.NewProgress(totalLines, stats)
 
+	// Channels for log lines and geo lookups
 	logChan := make(chan string, 10000)
 	geoChan := make(chan string, 100)
 	doneChan := make(chan struct{})
+
+	// In-memory set of IPs encountered during this run
+	// so we don't re-check the same IP multiple times.
+	var seenIPs sync.Map // key: string (IP), value: struct{}{}
+
+	// For the final JSON summary, keep track of successful inserts
+	// and how many brand-new IPs are found (optional).
+	var insertSuccesses int64
+	var newIPs int64
 
 	// Pre-filter suspicious logs
 	go func() {
 		for _, line := range lines {
 			if parser.IsSuspiciousLog(line) {
-				// Increment the suspicious counter instead of a local variable
-				stats.IncrementSuspicious()
+				stats.IncrementSuspicious() // track suspicious lines
 				logChan <- line
 			} else {
-				// If you’d like to track non-suspicious logs, uncomment:
+				// Optionally track non-suspicious lines:
 				// stats.IncrementNonRelevant()
 			}
 		}
@@ -82,29 +92,37 @@ func main() {
 	workerCount := 20
 	var wg sync.WaitGroup
 
-	// We'll introduce a new stat for successful inserts. Add it to the Stats struct if you like:
-	var insertSuccesses int64 // atomic counter for inserts
-
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for line := range logChan {
+				// Extract fields and insert log record
 				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl :=
 					parser.ExtractFields(line)
 
-				// Attempt insert
 				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err == nil {
-					atomic.AddInt64(&insertSuccesses, 1) // increment success
+					atomic.AddInt64(&insertSuccesses, 1)
 				} else {
-					// Log insertion errors but continue
 					log.Printf("Error inserting log entry: %v", err)
 				}
 
-				// Queue IP for geolocation
-				geoChan <- srcIP
+				// Now check if we've seen this IP yet *in this run*:
+				// If not, we do a DB check to see if it's already in ip_geo.
+				// Only if truly new, enqueue for geolocation.
+				if _, loaded := seenIPs.LoadOrStore(srcIP, struct{}{}); !loaded {
+					exists, err := dbHandler.IsIPInGeoTable(srcIP)
+					if err != nil {
+						log.Printf("Error checking IP in DB: %v", err)
+					} else if !exists {
+						// brand-new IP => queue for geolocation
+						atomic.AddInt64(&newIPs, 1) // track newly discovered IPs
+						geoChan <- srcIP
+					}
+					// If it exists, do nothing further for geolocation
+				}
 
-				// Track overall line progress
+				// Update progress
 				prog.Increment()
 				prog.DisplayIfNeeded(1 * time.Second)
 			}
@@ -117,7 +135,7 @@ func main() {
 		defer ticker.Stop()
 		for ip := range geoChan {
 			<-ticker.C
-			geo.ProcessIP(dbHandler, ip)
+			geo.ProcessIP(dbHandler, ip) // Actually do the geolocation & DB update
 		}
 	}()
 
@@ -142,6 +160,7 @@ func main() {
 		TotalLines:          totalLines,
 		SuspiciousLines:     int(atomic.LoadInt64(&stats.SuspiciousLines)),
 		SuccessfullyInserts: int(atomic.LoadInt64(&insertSuccesses)),
+		NewIPs:              int(atomic.LoadInt64(&newIPs)),
 	}
 
 	if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
