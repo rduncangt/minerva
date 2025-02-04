@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"minerva/internal/db"
 	"minerva/internal/geo"
@@ -89,24 +90,24 @@ func main() {
 				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl := parser.ExtractFields(line)
 
 				if dstIP == "" {
-					log.Printf("\nSkipping malformed log line: %s", line)
+					prog.BufferMessage(fmt.Sprintf("Skipping malformed log line: %s", line))
 					stats.IncrementSkippedLines()
 					continue
 				}
 
-				// Insert log entry
-				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err == nil {
+				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err != nil {
+					stats.IncrementErrors()
+					prog.BufferMessage(fmt.Sprintf("Insert error for DST=%q: %v", dstIP, err))
+				} else {
 					atomic.AddInt64(&insertSuccesses, 1)
 					stats.IncrementAlreadyInDB()
-				} else {
-					log.Printf("Insert error for DST=%q: %v", dstIP, err)
 				}
 
-				// Handle new IP geolocation
 				if _, loaded := seenIPs.LoadOrStore(srcIP, struct{}{}); !loaded {
 					exists, err := dbHandler.IsIPInGeoTable(srcIP)
 					if err != nil {
-						log.Printf("DB error checking IP: %v", err)
+						stats.IncrementErrors()
+						prog.BufferMessage(fmt.Sprintf("DB error checking IP: %v", err))
 					} else if !exists {
 						stats.IncrementNewIPs()
 						geoChan <- srcIP
