@@ -149,6 +149,8 @@ func (p *Progress) StartPeriodicDisplay(interval time.Duration, done <-chan stru
 // finalSummaryDisplay prints the final summary and JSON output.
 func (p *Progress) finalSummaryDisplay() {
 	elapsed := time.Since(p.startTime)
+
+	// Human-readable summary
 	fmt.Printf("\n%s\n--- Final Summary ---\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Printf("Execution time: %s\n", FormatDuration(elapsed))
 
@@ -163,15 +165,15 @@ func (p *Progress) finalSummaryDisplay() {
 			"Errors: %d | Events: %d | DB (Existing: %d) | New IPs: %d | Skipped: %d\n",
 			errors, eventLines, alreadyInDB, newIPs, skipped,
 		)
-
-		// JSON output embedded in the final summary
-		fmt.Printf("\nJSON Output:\n")
-		fmt.Printf(
-			"{\"total_lines\":%d,\"suspicious_events\":%d,\"records_inserted\":%d,\"new_ips\":%d}\n",
-			atomic.LoadInt64(&p.totalLines),
-			eventLines,
-			alreadyInDB,
-			newIPs,
-		)
 	}
+
+	// JSON summary
+	fmt.Printf("\nJSON Output:\n")
+	fmt.Printf(
+		"{\"total_lines\":%d,\"suspicious_events\":%d,\"records_inserted\":%d,\"new_ips\":%d}\n",
+		atomic.LoadInt64(&p.totalLines),
+		atomic.LoadInt64(&p.stats.EventLinesProcessed),
+		atomic.LoadInt64(&p.stats.AlreadyInDB),
+		atomic.LoadInt64(&p.stats.NewIPsDiscovered),
+	)
 }
