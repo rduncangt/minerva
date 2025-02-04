@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -31,8 +30,6 @@ func main() {
 
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
-
-	startTime := time.Now()
 
 	// Connect to the database
 	database, err := db.Connect("localhost", "5432", "minerva_user", "secure_password", "minerva")
@@ -140,20 +137,4 @@ func main() {
 	// Periodic progress display
 	prog.StartPeriodicDisplay(5*time.Second, doneChan)
 
-	// Final logs and summary
-	executionTime := time.Since(startTime)
-	log.Printf("Execution time: %v", executionTime)
-	log.Printf("Total rows processed: %d", totalLines)
-	log.Println("Log processing completed.")
-
-	summary := PipelineSummary{
-		TotalLines:       totalLines,
-		SuspiciousEvents: int(atomic.LoadInt64(&stats.EventLinesProcessed)),
-		RecordsInserted:  int(atomic.LoadInt64(&insertSuccesses)),
-		NewIPs:           int(atomic.LoadInt64(&stats.NewIPsDiscovered)),
-	}
-
-	if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
-		log.Printf("Failed to encode summary JSON: %v", err)
-	}
 }
