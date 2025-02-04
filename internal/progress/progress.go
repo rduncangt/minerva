@@ -12,6 +12,7 @@ type Stats struct {
 	SkippedLines        int64
 	AlreadyInDB         int64
 	NewIPsDiscovered    int64
+	ErrorCount          int64
 }
 
 // Increment methods for each stat.
@@ -31,20 +32,26 @@ func (s *Stats) IncrementNewIPs() {
 	atomic.AddInt64(&s.NewIPsDiscovered, 1)
 }
 
+func (s *Stats) IncrementErrors() {
+	atomic.AddInt64(&s.ErrorCount, 1)
+}
+
 type Progress struct {
 	totalLines     int64
 	processedLines int64
 	lastDisplay    time.Time
 	startTime      time.Time
 	stats          *Stats
+	messageBuffer  []string
 }
 
 func NewProgress(total int, stats *Stats) *Progress {
 	return &Progress{
-		totalLines:  int64(total),
-		lastDisplay: time.Now(),
-		startTime:   time.Now(),
-		stats:       stats,
+		totalLines:    int64(total),
+		lastDisplay:   time.Now(),
+		startTime:     time.Now(),
+		stats:         stats,
+		messageBuffer: make([]string, 0),
 	}
 }
 
@@ -54,6 +61,22 @@ func (p *Progress) Increment() {
 
 func (p *Progress) Processed() int64 {
 	return atomic.LoadInt64(&p.processedLines)
+}
+
+// BufferMessage stores messages that don't disrupt the progress display.
+func (p *Progress) BufferMessage(msg string) {
+	p.messageBuffer = append(p.messageBuffer, msg)
+	if len(p.messageBuffer) >= 10 {
+		p.FlushMessages()
+	}
+}
+
+// FlushMessages prints buffered messages without affecting the progress line.
+func (p *Progress) FlushMessages() {
+	for _, msg := range p.messageBuffer {
+		fmt.Printf("\n%s\n", msg)
+	}
+	p.messageBuffer = p.messageBuffer[:0] // Clear buffer
 }
 
 func (p *Progress) Display() {
@@ -88,12 +111,13 @@ func (p *Progress) Display() {
 	if p.stats != nil {
 		eventLines := atomic.LoadInt64(&p.stats.EventLinesProcessed)
 		skipped := atomic.LoadInt64(&p.stats.SkippedLines)
+		errors := atomic.LoadInt64(&p.stats.ErrorCount)
 		alreadyInDB := atomic.LoadInt64(&p.stats.AlreadyInDB)
 		newIPs := atomic.LoadInt64(&p.stats.NewIPsDiscovered)
 
 		line += fmt.Sprintf(
-			" | Events: %d | Skipped: %d | DB (Existing: %d) | New IPs: %d",
-			eventLines, skipped, alreadyInDB, newIPs,
+			" | Events: %d | Skipped: %d | Errors: %d | DB (Existing: %d) | New IPs: %d",
+			eventLines, skipped, errors, alreadyInDB, newIPs,
 		)
 	}
 
@@ -117,7 +141,7 @@ func (p *Progress) StartPeriodicDisplay(interval time.Duration, done <-chan stru
 		case <-ticker.C:
 			p.Display()
 		case <-done:
-			// One final display and newline for cleanliness
+			p.FlushMessages()
 			p.Display()
 			fmt.Println()
 			return
