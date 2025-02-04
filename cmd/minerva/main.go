@@ -101,10 +101,16 @@ func main() {
 				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl :=
 					parser.ExtractFields(line)
 
+				// If destination IP is missing or "unknown", skip this line with a detailed message:
+				if dstIP == "" || dstIP == "unknown" {
+					log.Printf("\nSkipping malformed log line (missing DST IP): %s", line)
+					continue
+				}
+
 				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err == nil {
 					atomic.AddInt64(&insertSuccesses, 1)
 				} else {
-					log.Printf("Error inserting log entry: %v", err)
+					log.Printf("Error inserting log entry (dst=%q) for line [%s]: %v", dstIP, line, err)
 				}
 
 				// Now check if we've seen this IP yet *in this run*:
