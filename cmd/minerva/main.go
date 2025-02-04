@@ -15,27 +15,25 @@ import (
 	"time"
 )
 
-const maxGeoQueriesPerMinute = 40 // Throttle below API limit of 45 per minute
+const maxGeoQueriesPerMinute = 40
 
-// PipelineSummary holds the info we'll print as JSON
 type PipelineSummary struct {
-	TotalLines          int `json:"total_lines"`
-	SuspiciousLines     int `json:"suspicious_lines"`
-	SuccessfullyInserts int `json:"successful_inserts"`
-	NewIPs              int `json:"new_ips"` // If you'd like to output how many new IPs were geolocated
+	TotalLines       int `json:"total_lines"`
+	SuspiciousEvents int `json:"suspicious_events"`
+	RecordsInserted  int `json:"records_inserted"`
+	NewIPs           int `json:"new_ips"`
 }
 
 func main() {
 	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order")
 	flag.Parse()
 
-	// Log to stderr so it's separate from any JSON on stdout.
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
 	startTime := time.Now()
 
-	// Connect to DB
+	// Connect to the database
 	database, err := db.Connect("localhost", "5432", "minerva_user", "secure_password", "minerva")
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -44,7 +42,7 @@ func main() {
 
 	dbHandler := &db.DBHandler{DB: database}
 
-	// Read input
+	// Read input logs
 	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
 		log.Fatalf("Error reading input: %v", err)
@@ -53,42 +51,33 @@ func main() {
 		lines = input.ReverseLines(lines)
 	}
 
-	// Create a stats object to hold counters (from progress package)
+	// Stats and progress tracking
 	stats := &progress.Stats{}
 	totalLines := len(lines)
-
-	// Create a Progress tracker with the Stats reference
 	prog := progress.NewProgress(totalLines, stats)
 
-	// Channels for log lines and geo lookups
+	// Channels and worker variables
 	logChan := make(chan string, 10000)
 	geoChan := make(chan string, 100)
 	doneChan := make(chan struct{})
 
-	// In-memory set of IPs encountered during this run
-	// so we don't re-check the same IP multiple times.
-	var seenIPs sync.Map // key: string (IP), value: struct{}{}
-
-	// For the final JSON summary, keep track of successful inserts
-	// and how many brand-new IPs are found (optional).
+	var seenIPs sync.Map
 	var insertSuccesses int64
-	var newIPs int64
 
-	// Pre-filter suspicious logs
+	// Pre-filter logs for events of interest
 	go func() {
 		for _, line := range lines {
 			if parser.IsSuspiciousLog(line) {
-				stats.IncrementSuspicious() // track suspicious lines
+				stats.IncrementEventLines()
 				logChan <- line
 			} else {
-				// Optionally track non-suspicious lines:
-				// stats.IncrementNonRelevant()
+				stats.IncrementSkippedLines()
 			}
 		}
 		close(logChan)
 	}()
 
-	// Worker pool
+	// Worker pool to handle log processing
 	workerCount := 20
 	var wg sync.WaitGroup
 
@@ -97,38 +86,33 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for line := range logChan {
-				// Extract fields and insert log record
-				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl :=
-					parser.ExtractFields(line)
+				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl := parser.ExtractFields(line)
 
-				// If destination IP is missing or "unknown", skip this line with a detailed message:
-				if dstIP == "" || dstIP == "unknown" {
-					log.Printf("\nSkipping malformed log line (missing DST IP): %s", line)
+				if dstIP == "" {
+					log.Printf("\nSkipping malformed log line: %s", line)
+					stats.IncrementSkippedLines()
 					continue
 				}
 
+				// Insert log entry
 				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err == nil {
 					atomic.AddInt64(&insertSuccesses, 1)
+					stats.IncrementAlreadyInDB()
 				} else {
-					log.Printf("Error inserting log entry (dst=%q) for line [%s]: %v", dstIP, line, err)
+					log.Printf("Insert error for DST=%q: %v", dstIP, err)
 				}
 
-				// Now check if we've seen this IP yet *in this run*:
-				// If not, we do a DB check to see if it's already in ip_geo.
-				// Only if truly new, enqueue for geolocation.
+				// Handle new IP geolocation
 				if _, loaded := seenIPs.LoadOrStore(srcIP, struct{}{}); !loaded {
 					exists, err := dbHandler.IsIPInGeoTable(srcIP)
 					if err != nil {
-						log.Printf("Error checking IP in DB: %v", err)
+						log.Printf("DB error checking IP: %v", err)
 					} else if !exists {
-						// brand-new IP => queue for geolocation
-						atomic.AddInt64(&newIPs, 1) // track newly discovered IPs
+						stats.IncrementNewIPs()
 						geoChan <- srcIP
 					}
-					// If it exists, do nothing further for geolocation
 				}
 
-				// Update progress
 				prog.Increment()
 				prog.DisplayIfNeeded(1 * time.Second)
 			}
@@ -141,32 +125,31 @@ func main() {
 		defer ticker.Stop()
 		for ip := range geoChan {
 			<-ticker.C
-			geo.ProcessIP(dbHandler, ip) // Actually do the geolocation & DB update
+			geo.ProcessIP(dbHandler, ip)
 		}
 	}()
 
-	// Close channels once workers finish
+	// Close channels when workers finish
 	go func() {
 		wg.Wait()
 		close(doneChan)
 		close(geoChan)
 	}()
 
-	// Periodic progress
+	// Periodic progress display
 	prog.StartPeriodicDisplay(5*time.Second, doneChan)
 
-	// Final logs
+	// Final logs and summary
 	executionTime := time.Since(startTime)
 	log.Printf("Execution time: %v", executionTime)
 	log.Printf("Total rows processed: %d", totalLines)
 	log.Println("Log processing completed.")
 
-	// Output JSON summary to stdout for the test
 	summary := PipelineSummary{
-		TotalLines:          totalLines,
-		SuspiciousLines:     int(atomic.LoadInt64(&stats.SuspiciousLines)),
-		SuccessfullyInserts: int(atomic.LoadInt64(&insertSuccesses)),
-		NewIPs:              int(atomic.LoadInt64(&newIPs)),
+		TotalLines:       totalLines,
+		SuspiciousEvents: int(atomic.LoadInt64(&stats.EventLinesProcessed)),
+		RecordsInserted:  int(atomic.LoadInt64(&insertSuccesses)),
+		NewIPs:           int(atomic.LoadInt64(&stats.NewIPsDiscovered)),
 	}
 
 	if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
