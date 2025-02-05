@@ -1,11 +1,34 @@
 package db
 
 import (
+	"database/sql"
+	"fmt"
 	"minerva/internal/geo"
 	"testing"
 	"time"
 )
 
+// Constants for test database parameters.
+const (
+	testHost     = "localhost"
+	testPort     = "5432"
+	testUser     = "minerva_user"
+	testPassword = "secure_password"
+	testDBName   = "minerva_test"
+)
+
+// truncateTable truncates the specified table in the database.
+func truncateTable(t *testing.T, db *sql.DB, table string) {
+	t.Helper()
+	_, err := db.Exec(fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table))
+	if err != nil {
+		t.Fatalf("Failed to truncate table %s: %v", table, err)
+	}
+}
+
+// TestConnect verifies the Connect function with various parameters.
+// NOTE: These tests assume that a test database named "minerva_test" exists
+// and that the schema is properly configured.
 func TestConnect(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -18,17 +41,17 @@ func TestConnect(t *testing.T) {
 	}{
 		{
 			name:      "Valid connection",
-			host:      "localhost",
-			port:      "5432",
-			user:      "minerva_user",
-			password:  "secure_password",
-			dbname:    "minerva_test",
+			host:      testHost,
+			port:      testPort,
+			user:      testUser,
+			password:  testPassword,
+			dbname:    testDBName,
 			expectErr: false,
 		},
 		{
 			name:      "Invalid credentials",
-			host:      "localhost",
-			port:      "5432",
+			host:      testHost,
+			port:      testPort,
 			user:      "invalid_user",
 			password:  "invalid_password",
 			dbname:    "test_db",
@@ -37,10 +60,10 @@ func TestConnect(t *testing.T) {
 		{
 			name:      "Invalid host",
 			host:      "invalid_host",
-			port:      "5432",
-			user:      "minerva_user",
-			password:  "secure_password",
-			dbname:    "minerva_test",
+			port:      testPort,
+			user:      testUser,
+			password:  testPassword,
+			dbname:    testDBName,
 			expectErr: true,
 		},
 	}
@@ -59,16 +82,14 @@ func TestConnect(t *testing.T) {
 }
 
 func TestInsertLogEntry(t *testing.T) {
-	db, err := Connect("localhost", "5432", "minerva_user", "secure_password", "minerva_test")
+	db, err := Connect(testHost, testPort, testUser, testPassword, testDBName)
 	if err != nil {
 		t.Fatalf("Failed to connect to the test database: %v", err)
 	}
 	defer db.Close()
 
-	_, err = db.Exec("TRUNCATE TABLE log_data RESTART IDENTITY CASCADE;")
-	if err != nil {
-		t.Fatalf("Failed to truncate table: %v", err)
-	}
+	// Truncate the log_data table before testing.
+	truncateTable(t, db, "log_data")
 
 	testCases := []struct {
 		name      string
@@ -98,6 +119,7 @@ func TestInsertLogEntry(t *testing.T) {
 			name:      "Missing destination IP",
 			timestamp: time.Now().Format(time.RFC3339),
 			sourceIP:  "192.0.2.1",
+			destIP:    "",
 			protocol:  "TCP",
 			action:    "DROP",
 			reason:    "No destination",
@@ -118,16 +140,14 @@ func TestInsertLogEntry(t *testing.T) {
 }
 
 func TestGeoDataInsertion(t *testing.T) {
-	db, err := Connect("localhost", "5432", "minerva_user", "secure_password", "minerva_test")
+	db, err := Connect(testHost, testPort, testUser, testPassword, testDBName)
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
 	defer db.Close()
 
-	_, err = db.Exec("TRUNCATE TABLE ip_geo RESTART IDENTITY CASCADE;")
-	if err != nil {
-		t.Fatalf("Failed to truncate table: %v", err)
-	}
+	// Truncate the ip_geo table before testing.
+	truncateTable(t, db, "ip_geo")
 
 	handler := &DBHandler{DB: db}
 
