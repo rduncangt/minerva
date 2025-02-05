@@ -27,7 +27,7 @@ Minerva is configured to retrieve log data from a remote Raspberry Pi using SSH,
 3. Move the binary to a system-wide directory:
 
     ```bash
-        sudo mv minerva /usr/local/bin/minerva
+    sudo mv minerva /usr/local/bin/minerva
     ```
 
 ## Wrapper Script
@@ -54,7 +54,7 @@ sudo chmod +x /usr/local/bin/minerva-run.sh
 
 ## Launchd Setup on macOS
 
-Create a launchd plist file at ~/Library/LaunchAgents/com.minerva.plist to schedule the job. For example, to run the job twice per day (at 7:00 AM and 7:00 PM):
+Create a launchd plist file at `~/Library/LaunchAgents/com.minerva.plist` to schedule the job. For example, to run the job twice per day (at 7:00 AM and 7:00 PM):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -116,7 +116,7 @@ launchctl list | grep com.minerva
     Validate with:
 
 ```bash
-    plutil -lint ~/Library/LaunchAgents/com.minerva.plist
+plutil -lint ~/Library/LaunchAgents/com.minerva.plist
 ```
 
 - Permissions:
