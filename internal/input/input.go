@@ -18,7 +18,7 @@ func ReadLines(r io.Reader) ([]string, error) {
 	return lines, nil
 }
 
-// ReverseLines reverses the order of lines in a slice.
+// ReverseLines reverses the order of lines in a slice in-place.
 func ReverseLines(lines []string) []string {
 	for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
 		lines[i], lines[j] = lines[j], lines[i]
