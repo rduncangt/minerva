@@ -4,14 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"minerva/internal/config" // <-- new import
+	"minerva/internal/config"
 	"minerva/internal/db"
 	"minerva/internal/geo"
 	"minerva/internal/input"
 	"minerva/internal/parser"
 	"minerva/internal/progress"
 	"os"
-	"strconv" // <-- new import for port conversion
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,13 +33,13 @@ func main() {
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
-	// Load configuration (new step)
+	// Load configuration from file.
 	conf, err := config.LoadConfig("minerva_config.toml")
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Connect to the database (original comment preserved, but now using config)
+	// Connect to the database using config values.
 	dbPort := strconv.Itoa(conf.Database.Port)
 	database, err := db.Connect(conf.Database.Host, dbPort, conf.Database.User, conf.Database.Password, conf.Database.Name)
 	if err != nil {
@@ -49,7 +49,7 @@ func main() {
 
 	dbHandler := &db.DBHandler{DB: database}
 
-	// Read input logs
+	// Read input logs from standard input.
 	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
 		log.Fatalf("Error reading input: %v", err)
@@ -58,12 +58,12 @@ func main() {
 		lines = input.ReverseLines(lines)
 	}
 
-	// Stats and progress tracking
+	// Set up progress tracking and statistics.
 	stats := &progress.Stats{}
 	totalLines := len(lines)
 	prog := progress.NewProgress(totalLines, stats)
 
-	// Channels and worker variables
+	// Set up channels and worker variables.
 	logChan := make(chan string, 10000)
 	geoChan := make(chan string, 100)
 	doneChan := make(chan struct{})
@@ -71,7 +71,7 @@ func main() {
 	var seenIPs sync.Map
 	var insertSuccesses int64
 
-	// Pre-filter logs for events of interest
+	// Pre-filter logs for suspicious events.
 	go func() {
 		for _, line := range lines {
 			if parser.IsSuspiciousLog(line) {
@@ -84,7 +84,7 @@ func main() {
 		close(logChan)
 	}()
 
-	// Worker pool to handle log processing
+	// Worker pool for processing logs.
 	workerCount := 20
 	var wg sync.WaitGroup
 
@@ -126,7 +126,7 @@ func main() {
 		}()
 	}
 
-	// Geo lookups with throttling
+	// Geo lookups with throttling.
 	go func() {
 		ticker := time.NewTicker(time.Minute / time.Duration(maxGeoQueriesPerMinute))
 		defer ticker.Stop()
@@ -136,13 +136,13 @@ func main() {
 		}
 	}()
 
-	// Close channels when workers finish
+	// Close channels when workers finish.
 	go func() {
 		wg.Wait()
 		close(doneChan)
 		close(geoChan)
 	}()
 
-	// Periodic progress display
+	// Start periodic progress display.
 	prog.StartPeriodicDisplay(5*time.Second, doneChan)
 }
