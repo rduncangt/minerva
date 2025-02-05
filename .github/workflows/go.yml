@@ -44,7 +44,7 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
-      - name: Copy config file # Make config file available
+      - name: Copy config file
         run: cp ./minerva_config.example.toml ./cmd/minerva/minerva_config.toml
 
       - name: Verify Go modules checksums
@@ -52,6 +52,10 @@ jobs:
 
       - name: Build
         run: go build -v ./...
+
+      - name: Create database schema
+        run: |
+          psql -U minerva_user -d minerva_test -f docs/data_schema.sql  # Execute schema.sql
 
       - name: Test
         run: go test -v ./... -coverprofile=coverage.out ./...
