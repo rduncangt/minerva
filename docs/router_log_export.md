@@ -8,7 +8,7 @@ This guide explains how to configure an AT&T router to export logs to the Raspbe
 
 1. Open a web browser and navigate to the router’s admin page. Typically:
 
-   ```
+   ```text
    http://192.168.1.254
    ```
 
@@ -23,13 +23,13 @@ This guide explains how to configure an AT&T router to export logs to the Raspbe
 3. Configure the following settings:
    - **Syslog Server IP**: Enter the IP address of your Raspberry Pi. Example:
 
-     ```
+     ```text
      192.168.1.84
      ```
 
    - **Syslog Port**: Use the default syslog port:
 
-     ```
+     ```text
      514
      ```
 
@@ -53,7 +53,7 @@ This guide explains how to configure an AT&T router to export logs to the Raspbe
 
    You should see entries from the router. For example:
 
-   ```
+   ```text
    Jan 8 00:01:08 dsldevice.attlocal.net L4 FIREWALL[7567]: action=DROP ...
    ```
 
