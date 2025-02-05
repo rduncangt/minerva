@@ -8,10 +8,20 @@ import (
 	"time"
 )
 
-var apiURL = "http://ip-api.com/json" // Default URL for geolocation API
+var apiURL = "http://ip-api.com/json" // Default URL for geolocation API. Can be overridden using SetAPIURL.
 
 // client is a reusable HTTP client with a timeout.
 var client = &http.Client{Timeout: 10 * time.Second}
+
+// SetAPIURL allows overriding the default geolocation API URL.
+func SetAPIURL(url string) {
+	apiURL = url
+}
+
+// SetHTTPClient allows overriding the default HTTP client.
+func SetHTTPClient(c *http.Client) {
+	client = c
+}
 
 // GeoData represents geolocation information for an IP address.
 type GeoData struct {
@@ -49,8 +59,9 @@ type GeoDataHandler interface {
 }
 
 // ProcessIP handles the full lifecycle of fetching and storing geolocation data for an IP.
+// If the IP already exists in the geo table or an error occurs, it logs the error and returns.
 func ProcessIP(handler GeoDataHandler, ip string) {
-	// Check if the IP already exists in the ip_geo table
+	// Check if the IP already exists in the ip_geo table.
 	exists, err := handler.IsIPInGeoTable(ip)
 	if err != nil {
 		log.Printf("Error checking IP in geo table: %v", err)
@@ -60,16 +71,15 @@ func ProcessIP(handler GeoDataHandler, ip string) {
 		return
 	}
 
-	// Fetch geolocation data
+	// Fetch geolocation data.
 	geoData, err := FetchGeolocation(ip)
 	if err != nil {
 		log.Printf("Error fetching geolocation for IP %s: %v", ip, err)
 		return
 	}
 
-	// Insert or update geolocation data
-	err = handler.InsertOrUpdateGeoData(ip, geoData)
-	if err != nil {
+	// Insert or update geolocation data.
+	if err := handler.InsertOrUpdateGeoData(ip, geoData); err != nil {
 		log.Printf("Error inserting/updating geolocation data for IP %s: %v", ip, err)
 	}
 }
