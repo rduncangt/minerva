@@ -47,7 +47,7 @@ func main() {
 	}
 	defer database.Close()
 
-	dbHandler := &db.DBHandler{DB: database}
+	dbHandler := &db.Handler{DB: database}
 
 	// Read input logs from standard input.
 	lines, err := input.ReadLines(os.Stdin)

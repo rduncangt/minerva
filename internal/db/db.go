@@ -65,13 +65,13 @@ func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, ac
 	return nil
 }
 
-// DBHandler is a wrapper around *sql.DB that implements GeoDataHandler.
-type DBHandler struct {
+// Handler is a wrapper around *sql.DB that implements GeoDataHandler.
+type Handler struct {
 	DB *sql.DB
 }
 
 // IsIPInGeoTable checks whether the given IP address exists in the ip_geo table.
-func (h *DBHandler) IsIPInGeoTable(ip string) (bool, error) {
+func (h *Handler) IsIPInGeoTable(ip string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM ip_geo WHERE ip_address = $1)`
 	err := h.DB.QueryRow(query, ip).Scan(&exists)
@@ -82,7 +82,7 @@ func (h *DBHandler) IsIPInGeoTable(ip string) (bool, error) {
 }
 
 // InsertOrUpdateGeoData inserts or updates geolocation data for an IP address.
-func (h *DBHandler) InsertOrUpdateGeoData(ip string, geoData *geo.GeoData) error {
+func (h *Handler) InsertOrUpdateGeoData(ip string, geoData *geo.GeoData) error {
 	insertSQL := `
     INSERT INTO ip_geo (
         ip_address, country, region, city, isp, last_updated

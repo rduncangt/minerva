@@ -149,7 +149,7 @@ func TestGeoDataInsertion(t *testing.T) {
 	// Truncate the ip_geo table before testing.
 	truncateTable(t, db, "ip_geo")
 
-	handler := &DBHandler{DB: db}
+	handler := &Handler{DB: db}
 
 	geoData := &geo.GeoData{
 		Country: "United States",
