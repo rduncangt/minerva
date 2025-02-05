@@ -103,6 +103,10 @@ Run unit tests:
 go test ./... -v
 ```
 
+## Automation
+
+Minerva's log ingestion is automated using a wrapper script and launchd on macOS. Detailed instructions for compiling the binary, setting up the wrapper script, and configuring launchd can be found in [docs/automation.md](docs/automation.md).
+
 ## Contributing
 
 Contributions are welcome! Please fork the repository and open a pull request with your proposed changes.
