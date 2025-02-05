@@ -4,12 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"minerva/internal/config" // <-- new import
 	"minerva/internal/db"
 	"minerva/internal/geo"
 	"minerva/internal/input"
 	"minerva/internal/parser"
 	"minerva/internal/progress"
 	"os"
+	"strconv" // <-- new import for port conversion
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,8 +33,15 @@ func main() {
 	log.SetOutput(os.Stderr)
 	log.Println("Starting log processing...")
 
-	// Connect to the database
-	database, err := db.Connect("localhost", "5432", "minerva_user", "secure_password", "minerva")
+	// Load configuration (new step)
+	conf, err := config.LoadConfig("minerva_config.toml")
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Connect to the database (original comment preserved, but now using config)
+	dbPort := strconv.Itoa(conf.Database.Port)
+	database, err := db.Connect(conf.Database.Host, dbPort, conf.Database.User, conf.Database.Password, conf.Database.Name)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -136,5 +145,4 @@ func main() {
 
 	// Periodic progress display
 	prog.StartPeriodicDisplay(5*time.Second, doneChan)
-
 }
