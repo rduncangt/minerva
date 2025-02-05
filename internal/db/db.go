@@ -82,7 +82,7 @@ func (h *Handler) IsIPInGeoTable(ip string) (bool, error) {
 }
 
 // InsertOrUpdateGeoData inserts or updates geolocation data for an IP address.
-func (h *Handler) InsertOrUpdateGeoData(ip string, geoData *geo.GeoData) error {
+func (h *Handler) InsertOrUpdateGeoData(ip string, geoData *geo.Data) error {
 	insertSQL := `
     INSERT INTO ip_geo (
         ip_address, country, region, city, isp, last_updated

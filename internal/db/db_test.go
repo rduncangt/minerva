@@ -151,7 +151,7 @@ func TestGeoDataInsertion(t *testing.T) {
 
 	handler := &Handler{DB: db}
 
-	geoData := &geo.GeoData{
+	geoData := &geo.Data{
 		Country: "United States",
 		Region:  "California",
 		City:    "San Francisco",

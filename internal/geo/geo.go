@@ -23,8 +23,8 @@ func SetHTTPClient(c *http.Client) {
 	client = c
 }
 
-// GeoData represents geolocation information for an IP address.
-type GeoData struct {
+// Data represents geolocation information for an IP address.
+type Data struct {
 	Country string `json:"country"`
 	Region  string `json:"regionName"`
 	City    string `json:"city"`
@@ -32,7 +32,7 @@ type GeoData struct {
 }
 
 // FetchGeolocation retrieves geolocation data for the given IP address by querying the geolocation API.
-func FetchGeolocation(ip string) (*GeoData, error) {
+func FetchGeolocation(ip string) (*Data, error) {
 	url := fmt.Sprintf("%s/%s", apiURL, ip)
 
 	resp, err := client.Get(url)
@@ -45,7 +45,7 @@ func FetchGeolocation(ip string) (*GeoData, error) {
 		return nil, fmt.Errorf("API returned status code %d", resp.StatusCode)
 	}
 
-	var geoData GeoData
+	var geoData Data
 	if err := json.NewDecoder(resp.Body).Decode(&geoData); err != nil {
 		return nil, fmt.Errorf("failed to decode geolocation data: %w", err)
 	}
@@ -55,7 +55,7 @@ func FetchGeolocation(ip string) (*GeoData, error) {
 // GeoDataHandler defines methods for geolocation data handling.
 type GeoDataHandler interface {
 	IsIPInGeoTable(ip string) (bool, error)
-	InsertOrUpdateGeoData(ip string, geoData *GeoData) error
+	InsertOrUpdateGeoData(ip string, geoData *Data) error
 }
 
 // ProcessIP handles the full lifecycle of fetching and storing geolocation data for an IP.
