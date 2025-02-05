@@ -16,3 +16,4 @@ pkg/
 !*.sql
 
 code_dump.md
+minerva_config.toml
