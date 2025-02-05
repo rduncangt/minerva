@@ -15,12 +15,12 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Verify the connection
 	if err := db.Ping(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	return db, nil
@@ -31,7 +31,6 @@ func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, ac
 	sourcePort, destinationPort, packetLength, ttl int) error {
 
 	// Basic validation to enforce mandatory fields.
-	// If these are truly required in your schema, return an error rather than inserting "unknown."
 	if timestamp == "unknown" {
 		return fmt.Errorf("invalid timestamp")
 	}
@@ -76,7 +75,10 @@ func (h *DBHandler) IsIPInGeoTable(ip string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM ip_geo WHERE ip_address = $1)`
 	err := h.DB.QueryRow(query, ip).Scan(&exists)
-	return exists, err
+	if err != nil {
+		return false, fmt.Errorf("failed to check geo table for IP %s: %w", ip, err)
+	}
+	return exists, nil
 }
 
 // InsertOrUpdateGeoData inserts or updates geolocation data for an IP address.
@@ -94,7 +96,7 @@ func (h *DBHandler) InsertOrUpdateGeoData(ip string, geoData *geo.GeoData) error
 
 	_, err := h.DB.Exec(insertSQL, ip, geoData.Country, geoData.Region, geoData.City, geoData.ISP)
 	if err != nil {
-		return fmt.Errorf("failed to insert or update geolocation data: %w", err)
+		return fmt.Errorf("failed to insert or update geolocation data for IP %s: %w", ip, err)
 	}
 	return nil
 }
