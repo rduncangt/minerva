@@ -55,7 +55,7 @@ jobs:
 
       - name: Create database schema
         run: |
-          psql -U minerva_user -d minerva_test -f docs/data_schema.sql  # Execute schema.sql
+          psql -h postgres -U minerva_user -d minerva_test -f docs/data_schema.sql  # Execute schema.sql
 
       - name: Test
         run: go test -v ./... -coverprofile=coverage.out ./...
