@@ -19,6 +19,7 @@ import (
 
 const maxGeoQueriesPerMinute = 40
 
+// PipelineSummary holds statistics about the log processing pipeline.
 type PipelineSummary struct {
 	TotalLines       int `json:"total_lines"`
 	SuspiciousEvents int `json:"suspicious_events"`

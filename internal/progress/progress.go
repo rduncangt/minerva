@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Stats tracks various processing statistics, such as event counts and errors.
 type Stats struct {
 	EventLinesProcessed int64
 	SkippedLines        int64
@@ -14,26 +15,32 @@ type Stats struct {
 	ErrorCount          int64
 }
 
+// IncrementEventLines increments the count of suspicious event lines processed.
 func (s *Stats) IncrementEventLines() {
 	atomic.AddInt64(&s.EventLinesProcessed, 1)
 }
 
+// IncrementSkippedLines increments the count of lines that were skipped.
 func (s *Stats) IncrementSkippedLines() {
 	atomic.AddInt64(&s.SkippedLines, 1)
 }
 
+// IncrementAlreadyInDB increments the count of log entries already present in the database.
 func (s *Stats) IncrementAlreadyInDB() {
 	atomic.AddInt64(&s.AlreadyInDB, 1)
 }
 
+// IncrementNewIPs increments the count of newly discovered IP addresses.
 func (s *Stats) IncrementNewIPs() {
 	atomic.AddInt64(&s.NewIPsDiscovered, 1)
 }
 
+// IncrementErrors increments the count of errors encountered during processing.
 func (s *Stats) IncrementErrors() {
 	atomic.AddInt64(&s.ErrorCount, 1)
 }
 
+// Progress manages and displays the overall progress of log processing.
 type Progress struct {
 	totalLines     int64
 	processedLines int64
@@ -43,6 +50,7 @@ type Progress struct {
 	messageBuffer  []string
 }
 
+// NewProgress creates and returns a new Progress instance with the given total lines and statistics.
 func NewProgress(total int, stats *Stats) *Progress {
 	return &Progress{
 		totalLines:    int64(total),
@@ -53,18 +61,22 @@ func NewProgress(total int, stats *Stats) *Progress {
 	}
 }
 
+// Increment increases the processed lines count.
 func (p *Progress) Increment() {
 	atomic.AddInt64(&p.processedLines, 1)
 }
 
+// Processed returns the number of lines processed so far.
 func (p *Progress) Processed() int64 {
 	return atomic.LoadInt64(&p.processedLines)
 }
 
+// BufferMessage adds a message to the progress buffer for later display.
 func (p *Progress) BufferMessage(msg string) {
 	p.messageBuffer = append(p.messageBuffer, msg)
 }
 
+// FlushMessages outputs all buffered messages immediately.
 func (p *Progress) FlushMessages() {
 	if len(p.messageBuffer) == 0 {
 		return
@@ -121,6 +133,7 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.2fs", d.Seconds())
 }
 
+// DisplayIfNeeded refreshes the progress display if the specified duration has elapsed.
 func (p *Progress) DisplayIfNeeded(minInterval time.Duration) {
 	now := time.Now()
 	if now.Sub(p.lastDisplay) >= minInterval {
@@ -130,6 +143,7 @@ func (p *Progress) DisplayIfNeeded(minInterval time.Duration) {
 	}
 }
 
+// StartPeriodicDisplay begins a periodic display of progress until processing is complete.
 func (p *Progress) StartPeriodicDisplay(interval time.Duration, done <-chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
