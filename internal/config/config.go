@@ -7,10 +7,12 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// Config represents the application configuration loaded from a TOML file.
 type Config struct {
 	Database DatabaseConfig `toml:"database"`
 }
 
+// DatabaseConfig holds the database connection parameters.
 type DatabaseConfig struct {
 	Host     string `toml:"host"`
 	Port     int    `toml:"port"`
@@ -19,6 +21,7 @@ type DatabaseConfig struct {
 	Name     string `toml:"name"`
 }
 
+// LoadConfig loads and parses the configuration from the specified file path.
 func LoadConfig(path string) (*Config, error) {
 	// Check if the config file exists and return a wrapped error if not.
 	if _, err := os.Stat(path); err != nil {
