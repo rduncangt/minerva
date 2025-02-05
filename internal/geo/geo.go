@@ -52,15 +52,15 @@ func FetchGeolocation(ip string) (*Data, error) {
 	return &geoData, nil
 }
 
-// GeoDataHandler defines methods for geolocation data handling.
-type GeoDataHandler interface {
+// DataHandler defines methods for geolocation data handling.
+type DataHandler interface {
 	IsIPInGeoTable(ip string) (bool, error)
 	InsertOrUpdateGeoData(ip string, geoData *Data) error
 }
 
 // ProcessIP handles the full lifecycle of fetching and storing geolocation data for an IP.
 // If the IP already exists in the geo table or an error occurs, it logs the error and returns.
-func ProcessIP(handler GeoDataHandler, ip string) {
+func ProcessIP(handler DataHandler, ip string) {
 	// Check if the IP already exists in the ip_geo table.
 	exists, err := handler.IsIPInGeoTable(ip)
 	if err != nil {
