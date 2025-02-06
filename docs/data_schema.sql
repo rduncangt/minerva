@@ -59,15 +59,3 @@ CREATE INDEX idx_ip_address ON ip_geo(ip_address);
 -- Define a unique constraint to prevent duplicate log entries
 ALTER TABLE log_data
     ADD CONSTRAINT unique_log_entry UNIQUE (timestamp, source_ip, destination_ip, protocol, source_port, destination_port);
-
---
--- Add foreign key constraints to ensure data integrity
---
-
-ALTER TABLE log_data
-    ADD CONSTRAINT fk_log_data_source_ip_ip_geo
-        FOREIGN KEY (source_ip) REFERENCES ip_geo(ip_address);
-
-ALTER TABLE log_data
-    ADD CONSTRAINT fk_log_data_destination_ip_ip_geo
-        FOREIGN KEY (destination_ip) REFERENCES ip_geo(ip_address);

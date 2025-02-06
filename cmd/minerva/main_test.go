@@ -7,6 +7,11 @@ import (
 )
 
 func TestEndToEndPipeline(t *testing.T) {
+
+	// Override the database name for testing.
+	os.Setenv("MINERVA_DB_NAME", "minerva_test")
+	defer os.Unsetenv("MINERVA_DB_NAME")
+
 	// Prepare mock input log data.
 	mockInput := `
 action=DROP reason=PORTSCAN SRC=192.0.2.1 DST=192.0.2.2 PROTO=TCP SPT=12345 DPT=80

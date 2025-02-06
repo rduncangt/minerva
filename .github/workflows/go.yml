@@ -2,7 +2,7 @@ name: Go CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ ]
   pull_request:
     branches: [ main ]
 
@@ -54,11 +54,12 @@ jobs:
 
       - name: Wait for PostgreSQL to be ready
         run: |
-          while ! pg_isready -U minerva_user -d minerva_test -h postgres; do sleep 1; done
+          while ! pg_isready -U minerva_user -d minerva_test -h 127.0.0.1; do sleep 1; done
 
       - name: Create database schema
         run: |
-          psql -h postgres -U minerva_user -d minerva_test -f docs/data_schema.sql
+          export PGPASSWORD=secure_password
+          psql -h 127.0.0.1 -U minerva_user -d minerva_test -f docs/data_schema.sql
 
       - name: Test
         run: go test -v ./... -coverprofile=coverage.out ./...

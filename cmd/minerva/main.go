@@ -40,6 +40,11 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Allow overriding the database name with an environment variable.
+	if dbName := os.Getenv("MINERVA_DB_NAME"); dbName != "" {
+		conf.Database.Name = dbName
+	}
+
 	// Connect to the database using config values.
 	dbPort := strconv.Itoa(conf.Database.Port)
 	database, err := db.Connect(conf.Database.Host, dbPort, conf.Database.User, conf.Database.Password, conf.Database.Name)
