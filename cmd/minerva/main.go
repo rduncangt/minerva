@@ -71,7 +71,7 @@ func main() {
 
 	// Set up channels and worker variables.
 	logChan := make(chan string, 10000)
-	geoChan := make(chan string, 100)
+	geoChan := make(chan string, 10000)
 	doneChan := make(chan struct{})
 
 	var seenIPs sync.Map
@@ -132,10 +132,15 @@ func main() {
 		}()
 	}
 
+	var geoWG sync.WaitGroup
+
 	// Geo lookups with throttling.
+	geoWG.Add(1)
 	go func() {
+		defer geoWG.Done()
 		ticker := time.NewTicker(time.Minute / time.Duration(maxGeoQueriesPerMinute))
 		defer ticker.Stop()
+
 		for ip := range geoChan {
 			<-ticker.C
 			geo.ProcessIP(dbHandler, ip)
@@ -144,9 +149,13 @@ func main() {
 
 	// Close channels when workers finish.
 	go func() {
-		wg.Wait()
-		close(doneChan)
+		wg.Wait() // wait for all workers to finish
 		close(geoChan)
+	}()
+
+	go func() {
+		geoWG.Wait() // wait for all geo lookups to finish
+		close(doneChan)
 	}()
 
 	// Start periodic progress display.
