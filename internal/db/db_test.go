@@ -131,7 +131,7 @@ func TestInsertLogEntry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := InsertLogEntry(db, tc.timestamp, tc.sourceIP, tc.destIP, tc.protocol, tc.action, tc.reason, 12345, 80, tc.packetLen, tc.ttl)
+			_, err := InsertLogEntry(db, tc.timestamp, tc.sourceIP, tc.destIP, tc.protocol, tc.action, tc.reason, 12345, 80, tc.packetLen, tc.ttl)
 			if (err != nil) != tc.expectErr {
 				t.Errorf("Test %q: expected error: %v, got: %v", tc.name, tc.expectErr, err)
 			}
