@@ -28,14 +28,14 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 
 // InsertLogEntry inserts a new log entry into the log_data table, including new fields.
 func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, action, reason string,
-	sourcePort, destinationPort, packetLength, ttl int) error {
+	sourcePort, destinationPort, packetLength, ttl int) (rowsInserted int64, err error) {
 
 	// Basic validation to enforce mandatory fields.
-	if timestamp == "unknown" {
-		return fmt.Errorf("invalid timestamp")
+	if timestamp == "" || timestamp == "unknown" {
+		return 0, fmt.Errorf("invalid timestamp")
 	}
 	if destinationIP == "" || destinationIP == "unknown" {
-		return fmt.Errorf("invalid destination IP")
+		return 0, fmt.Errorf("invalid destination IP")
 	}
 
 	insertSQL := `
@@ -47,7 +47,7 @@ func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, ac
         ON CONFLICT (timestamp, source_ip, destination_ip, protocol, source_port, destination_port)
         DO NOTHING;
     `
-	_, err := db.Exec(insertSQL,
+	result, errExec := db.Exec(insertSQL,
 		timestamp,
 		sourceIP,
 		destinationIP,
@@ -59,10 +59,16 @@ func InsertLogEntry(db *sql.DB, timestamp, sourceIP, destinationIP, protocol, ac
 		packetLength,
 		ttl,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to insert log entry: %w", err)
+	if errExec != nil {
+		return 0, fmt.Errorf("failed to insert log entry: %w", errExec)
 	}
-	return nil
+
+	// Get the number of affected rows
+	rowsInserted, errRowsAffected := result.RowsAffected()
+	if errRowsAffected != nil {
+		return 0, fmt.Errorf("failed to retrieve affected row count: %w", errRowsAffected)
+	}
+	return rowsInserted, nil
 }
 
 // Handler is a wrapper around *sql.DB that implements GeoDataHandler.
