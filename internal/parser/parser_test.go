@@ -2,7 +2,7 @@ package parser
 
 import "testing"
 
-func TestIsSuspiciousLog(t *testing.T) {
+func TestIsFlaggedLog(t *testing.T) {
 	tests := []struct {
 		line     string
 		expected bool
@@ -14,7 +14,7 @@ func TestIsSuspiciousLog(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := IsSuspiciousLog(test.line)
+		result := IsFlaggedLog(test.line)
 		if result != test.expected {
 			t.Errorf("Expected IsSuspiciousLog(%q) to be %v, got %v", test.line, test.expected, result)
 		}
