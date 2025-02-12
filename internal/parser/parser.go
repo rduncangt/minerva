@@ -20,9 +20,23 @@ var (
 	ttlRegex       = regexp.MustCompile(`TTL=(\d+)`)
 )
 
-// IsSuspiciousLog checks if a log line indicates a potential threat.
-func IsSuspiciousLog(line string) bool {
-	suspiciousReasons := []string{
+// IsValidLine checks if a log line is well-formed.
+func IsValidLine(line string) bool {
+	return timestampRegex.MatchString(line) &&
+		ipRegex.MatchString(line) &&
+		dstRegex.MatchString(line) &&
+		sptRegex.MatchString(line) &&
+		dptRegex.MatchString(line) &&
+		protoRegex.MatchString(line) &&
+		actionRegex.MatchString(line) &&
+		reasonRegex.MatchString(line) &&
+		lengthRegex.MatchString(line) &&
+		ttlRegex.MatchString(line)
+}
+
+// IsFlaggedLog checks if a log line indicates a potential threat.
+func IsFlaggedLog(line string) bool {
+	FlaggedReasons := []string{
 		"POLICY-INPUT-GEN-DISCARD",
 		"PORTSCAN",
 		"INTRUSION-DETECTED",
@@ -33,7 +47,7 @@ func IsSuspiciousLog(line string) bool {
 		return false
 	}
 
-	for _, reason := range suspiciousReasons {
+	for _, reason := range FlaggedReasons {
 		if strings.Contains(line, reason) {
 			return true
 		}
