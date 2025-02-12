@@ -13,19 +13,10 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 const maxGeoQueriesPerMinute = 40
-
-// PipelineSummary holds statistics about the log processing pipeline.
-type PipelineSummary struct {
-	TotalLines       int `json:"total_lines"`
-	SuspiciousEvents int `json:"suspicious_events"`
-	RecordsInserted  int `json:"records_inserted"`
-	NewIPs           int `json:"new_ips"`
-}
 
 func main() {
 	reverseFlag := flag.Bool("r", false, "Process logs in oldest-first order")
@@ -55,87 +46,108 @@ func main() {
 
 	dbHandler := &db.Handler{DB: database}
 
-	// Read input logs from standard input.
+	// Read input logs from stdin.
 	lines, err := input.ReadLines(os.Stdin)
 	if err != nil {
 		log.Fatalf("Error reading input: %v", err)
 	}
+	totalLines := len(lines)
+
+	// Optionally reverse lines.
 	if !*reverseFlag {
 		lines = input.ReverseLines(lines)
 	}
 
-	// Set up progress tracking and statistics.
+	// Set up statistics and progress tracker.
 	stats := &progress.Stats{}
-	totalLines := len(lines)
-	prog := progress.NewProgress(totalLines, stats)
+	prog := progress.NewProgress(int64(totalLines), stats)
 
-	// Set up channels and worker variables.
+	// Channels to move data through pipeline.
 	logChan := make(chan string, 10000)
 	geoChan := make(chan string, 10000)
 	doneChan := make(chan struct{})
 
+	// We’ll keep track of IPs we’ve already queued for geo so we don’t re-queue them.
 	var seenIPs sync.Map
-	var insertSuccesses int64
 
-	// Pre-filter logs for suspicious events.
+	//
+	// 1) Pre-filter logs
+	//    - If line is invalid → stats.IncrementMalformed()
+	//    - Else if flagged → send to logChan
+	//    - Else increment benign
+	//
 	go func() {
 		for _, line := range lines {
-			if parser.IsSuspiciousLog(line) {
-				stats.IncrementEventLines()
+			stats.IncrementLinesRead()
+
+			if !parser.IsValidLine(line) {
+				stats.IncrementMalformed()
+				continue
+			}
+			if parser.IsFlaggedLog(line) {
+				stats.IncrementFlagged()
 				logChan <- line
 			} else {
-				stats.IncrementSkippedLines()
+				stats.IncrementBenign()
 			}
 		}
 		close(logChan)
 	}()
 
-	// Worker pool for processing logs.
+	//
+	// 2) Worker pool to insert logs in DB and dispatch new IP lookups.
+	//
 	workerCount := 20
 	var wg sync.WaitGroup
+	wg.Add(workerCount)
 
 	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for line := range logChan {
 				timestamp, srcIP, dstIP, spt, dpt, proto, action, reason, packetLength, ttl := parser.ExtractFields(line)
 
 				if dstIP == "" {
+					// Additional malformed check
 					prog.BufferMessage(fmt.Sprintf("Skipping malformed log line: %s", line))
-					stats.IncrementSkippedLines()
+					stats.IncrementMalformed()
 					continue
 				}
 
-				if err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err != nil {
+				// Insert into database
+				if rowInserted, err := db.InsertLogEntry(database, timestamp, srcIP, dstIP, proto, action, reason, spt, dpt, packetLength, ttl); err != nil {
 					stats.IncrementErrors()
 					prog.BufferMessage(fmt.Sprintf("Insert error for DST=%q: %v", dstIP, err))
-				} else {
-					atomic.AddInt64(&insertSuccesses, 1)
-					stats.IncrementAlreadyInDB()
+				} else if rowInserted > 0 {
+					stats.IncrementInserted()
 				}
 
-				if _, loaded := seenIPs.LoadOrStore(srcIP, struct{}{}); !loaded {
-					exists, err := dbHandler.IsIPInGeoTable(srcIP)
-					if err != nil {
-						stats.IncrementErrors()
-						prog.BufferMessage(fmt.Sprintf("DB error checking IP: %v", err))
-					} else if !exists {
-						stats.IncrementNewIPs()
-						geoChan <- srcIP
+				// Check for IP lookups
+				if srcIP != "" {
+					if _, loaded := seenIPs.LoadOrStore(srcIP, struct{}{}); !loaded {
+						exists, err := dbHandler.IsIPInGeoTable(srcIP)
+						if err != nil {
+							stats.IncrementErrors()
+							prog.BufferMessage(fmt.Sprintf("DB error checking IP: %v", err))
+						} else if !exists {
+							stats.IncrementGeoQueued()
+							geoChan <- srcIP
+						} // IP not seen yet, queue it
 					}
 				}
 
-				prog.Increment()
-				prog.DisplayIfNeeded(1 * time.Second)
+				prog.IncrementProcessed()
+				prog.DisplayIfNeeded(2 * time.Second) // Show updates periodically
 			}
 		}()
 	}
 
+	//
+	// 3) Single goroutine to handle geo lookups with throttling.
+	//
 	var geoWG sync.WaitGroup
-
-	// Geo lookups with throttling.
 	geoWG.Add(1)
+
 	go func() {
 		defer geoWG.Done()
 		ticker := time.NewTicker(time.Minute / time.Duration(maxGeoQueriesPerMinute))
@@ -143,21 +155,33 @@ func main() {
 
 		for ip := range geoChan {
 			<-ticker.C
-			geo.ProcessIP(dbHandler, ip)
+
+			err := geo.ProcessIP(dbHandler, ip)
+
+			// Decrement from the “in queue” count
+			stats.DecrementGeoQueued()
+
+			if err != nil {
+				stats.IncrementGeoErrors()
+				prog.BufferMessage(fmt.Sprintf("Geo lookup failed for IP=%s: %v", ip, err))
+				continue
+			}
+			stats.IncrementGeoCompleted()
 		}
 	}()
 
-	// Close channels when workers finish.
+	// Close geoChan when DB workers finish
 	go func() {
-		wg.Wait() // wait for all workers to finish
+		wg.Wait()
 		close(geoChan)
 	}()
 
+	// Signal main doneChan when geo lookups finish
 	go func() {
-		geoWG.Wait() // wait for all geo lookups to finish
+		geoWG.Wait()
 		close(doneChan)
 	}()
 
-	// Start periodic progress display.
+	// Start periodic progress display until everything is done
 	prog.StartPeriodicDisplay(5*time.Second, doneChan)
 }
