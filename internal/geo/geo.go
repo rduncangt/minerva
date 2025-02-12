@@ -60,11 +60,10 @@ type DataHandler interface {
 
 // ProcessIP handles the full lifecycle of fetching and storing geolocation data for an IP.
 // If the IP already exists in the geo table or an error occurs, it logs the error and returns.
-func ProcessIP(handler DataHandler, ip string) {
+func ProcessIP(handler DataHandler, ip string) (err error) {
 	// Check if the IP already exists in the ip_geo table.
 	exists, err := handler.IsIPInGeoTable(ip)
 	if err != nil {
-		log.Printf("Error checking IP in geo table: %v", err)
 		return
 	}
 	if exists {
@@ -82,4 +81,6 @@ func ProcessIP(handler DataHandler, ip string) {
 	if err := handler.InsertOrUpdateGeoData(ip, geoData); err != nil {
 		log.Printf("Error inserting/updating geolocation data for IP %s: %v", ip, err)
 	}
+
+	return
 }
