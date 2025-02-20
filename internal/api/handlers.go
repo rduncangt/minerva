@@ -9,6 +9,18 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// jsonResponse writes JSON response with appropriate headers.
+func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
+// jsonErrorResponse writes a JSON error response.
+func jsonErrorResponse(w http.ResponseWriter, status int, message string) {
+	jsonResponse(w, status, map[string]string{"error": message})
+}
+
 // GetLogs returns a paginated list of logs from the log_data table.
 func GetLogs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +36,7 @@ func GetLogs(db *sql.DB) http.HandlerFunc {
 		query := `SELECT timestamp, source_ip, destination_ip, protocol, action FROM log_data ORDER BY timestamp DESC LIMIT $1 OFFSET $2`
 		rows, err := db.Query(query, limit, offset)
 		if err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
+			jsonErrorResponse(w, http.StatusInternalServerError, "Database error")
 			return
 		}
 		defer rows.Close()
@@ -33,7 +45,7 @@ func GetLogs(db *sql.DB) http.HandlerFunc {
 		for rows.Next() {
 			var ts, srcIP, dstIP, proto, action string
 			if err := rows.Scan(&ts, &srcIP, &dstIP, &proto, &action); err != nil {
-				http.Error(w, "Scan error", http.StatusInternalServerError)
+				jsonErrorResponse(w, http.StatusInternalServerError, "Scan error")
 				return
 			}
 			logs = append(logs, map[string]interface{}{
@@ -45,7 +57,7 @@ func GetLogs(db *sql.DB) http.HandlerFunc {
 			})
 		}
 
-		json.NewEncoder(w).Encode(logs)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{"data": logs})
 	}
 }
 
@@ -55,11 +67,10 @@ func GetStats(db *sql.DB) http.HandlerFunc {
 		query := `SELECT COUNT(*) AS total_logs FROM log_data`
 		var totalLogs int
 		if err := db.QueryRow(query).Scan(&totalLogs); err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
+			jsonErrorResponse(w, http.StatusInternalServerError, "Database error")
 			return
 		}
-		stats := map[string]interface{}{"total_logs": totalLogs}
-		json.NewEncoder(w).Encode(stats)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{"data": map[string]interface{}{"total_logs": totalLogs}})
 	}
 }
 
@@ -71,10 +82,10 @@ func GetGeo(db *sql.DB) http.HandlerFunc {
 		query := `SELECT country, region, city, isp FROM ip_geo WHERE ip_address = $1`
 		var country, region, city, isp string
 		if err := db.QueryRow(query, ip).Scan(&country, &region, &city, &isp); err != nil {
-			http.Error(w, "IP not found", http.StatusNotFound)
+			jsonErrorResponse(w, http.StatusNotFound, "IP not found")
 			return
 		}
 		geoData := map[string]string{"ip": ip, "country": country, "region": region, "city": city, "isp": isp}
-		json.NewEncoder(w).Encode(geoData)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{"data": geoData})
 	}
 }
