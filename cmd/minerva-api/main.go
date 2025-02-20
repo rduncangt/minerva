@@ -50,5 +50,5 @@ func main() {
 	router.HandleFunc("/api/v1/stats", api.GetStats(database)).Methods("GET")
 	router.HandleFunc("/api/v1/geo/{ip}", api.GetGeo(database)).Methods("GET")
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", router))
 }
