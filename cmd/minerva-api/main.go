@@ -2,10 +2,13 @@ package main
 
 import (
 	"log"
+	"minerva/internal/api"
 	"minerva/internal/config"
 	"minerva/internal/db"
 	"net/http"
 	"os"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
@@ -41,6 +44,11 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/logs", api.GetLogs(database)).Methods("GET")
+	router.HandleFunc("/api/v1/stats", api.GetStats(database)).Methods("GET")
+	router.HandleFunc("/api/v1/geo/{ip}", api.GetGeo(database)).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
