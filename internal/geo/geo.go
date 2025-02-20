@@ -25,10 +25,12 @@ func SetHTTPClient(c *http.Client) {
 
 // Data represents geolocation information for an IP address.
 type Data struct {
-	Country string `json:"country"`
-	Region  string `json:"regionName"`
-	City    string `json:"city"`
-	ISP     string `json:"isp"`
+	Country   string  `json:"country"`
+	Region    string  `json:"regionName"`
+	City      string  `json:"city"`
+	ISP       string  `json:"isp"`
+	Latitude  float64 `json:"lat"`
+	Longitude float64 `json:"lon"`
 }
 
 // FetchGeolocation retrieves geolocation data for the given IP address by querying the geolocation API.
