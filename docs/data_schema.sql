@@ -51,6 +51,8 @@ CREATE TABLE ip_geo (
     region TEXT,
     city TEXT,
     isp TEXT,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
     last_updated TIMESTAMP DEFAULT NOW()
 );
 
