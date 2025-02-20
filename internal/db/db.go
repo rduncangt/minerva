@@ -91,16 +91,18 @@ func (h *Handler) IsIPInGeoTable(ip string) (bool, error) {
 func (h *Handler) InsertOrUpdateGeoData(ip string, geoData *geo.Data) error {
 	insertSQL := `
     INSERT INTO ip_geo (
-        ip_address, country, region, city, isp, last_updated
-    ) VALUES ($1, $2, $3, $4, $5, NOW())
+        ip_address, country, region, city, isp, latitude, longitude, last_updated
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
     ON CONFLICT (ip_address) DO UPDATE SET 
         country = EXCLUDED.country,
         region = EXCLUDED.region,
         city = EXCLUDED.city,
         isp = EXCLUDED.isp,
+        latitude = EXCLUDED.latitude,
+        longitude = EXCLUDED.longitude,
         last_updated = NOW();`
 
-	_, err := h.DB.Exec(insertSQL, ip, geoData.Country, geoData.Region, geoData.City, geoData.ISP)
+	_, err := h.DB.Exec(insertSQL, ip, geoData.Country, geoData.Region, geoData.City, geoData.ISP, geoData.Latitude, geoData.Longitude)
 	if err != nil {
 		return fmt.Errorf("failed to insert or update geolocation data for IP %s: %w", ip, err)
 	}

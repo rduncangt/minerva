@@ -79,13 +79,26 @@ func GetGeo(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		ip := vars["ip"]
-		query := `SELECT country, region, city, isp FROM ip_geo WHERE ip_address = $1`
+		query := `SELECT country, region, city, isp, latitude, longitude FROM ip_geo WHERE ip_address = $1`
 		var country, region, city, isp string
-		if err := db.QueryRow(query, ip).Scan(&country, &region, &city, &isp); err != nil {
+		var latitude, longitude float64
+
+		err := db.QueryRow(query, ip).Scan(&country, &region, &city, &isp, &latitude, &longitude)
+		if err != nil {
 			jsonErrorResponse(w, http.StatusNotFound, "IP not found")
 			return
 		}
-		geoData := map[string]string{"ip": ip, "country": country, "region": region, "city": city, "isp": isp}
+
+		geoData := map[string]interface{}{
+			"ip":        ip,
+			"country":   country,
+			"region":    region,
+			"city":      city,
+			"isp":       isp,
+			"latitude":  latitude,
+			"longitude": longitude,
+		}
+
 		jsonResponse(w, http.StatusOK, map[string]interface{}{"data": geoData})
 	}
 }
