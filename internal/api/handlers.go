@@ -81,7 +81,7 @@ func GetGeo(db *sql.DB) http.HandlerFunc {
 		ip := vars["ip"]
 		query := `SELECT country, region, city, isp, latitude, longitude FROM ip_geo WHERE ip_address = $1`
 		var country, region, city, isp string
-		var latitude, longitude float64
+		var latitude, longitude sql.NullFloat64
 
 		err := db.QueryRow(query, ip).Scan(&country, &region, &city, &isp, &latitude, &longitude)
 		if err != nil {
