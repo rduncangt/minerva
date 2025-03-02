@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"minerva/internal/api"
+	"minerva/internal/api/handlers"
 	"minerva/internal/config"
 	"minerva/internal/db"
 	"net/http"
@@ -46,9 +46,9 @@ func main() {
 	})
 
 	router := mux.NewRouter()
-	router.HandleFunc("/api/v1/logs", api.GetLogs(database)).Methods("GET")
-	router.HandleFunc("/api/v1/stats", api.GetStats(database)).Methods("GET")
-	router.HandleFunc("/api/v1/geo/{ip}", api.GetGeo(database)).Methods("GET")
+	router.HandleFunc("/api/v1/logs", handlers.GetLogs(database)).Methods("GET")
+	router.HandleFunc("/api/v1/stats", handlers.GetStats(database)).Methods("GET")
+	router.HandleFunc("/api/v1/geo/{ip}", handlers.GetGeo(database)).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
