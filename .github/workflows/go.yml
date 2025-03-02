@@ -43,6 +43,9 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: Clean Go module cache
+        run: go clean -modcache
+
       - name: Copy config file
         run: cp ./minerva_config.example.toml ./cmd/minerva/minerva_config.toml
 
