@@ -52,6 +52,12 @@ jobs:
       - name: Verify Go modules checksums
         run: go mod verify
 
+      - name: Debug module path
+        run: |
+          pwd
+          ls -lah
+          go env
+          
       - name: Build
         run: go build -v ./...
 
